@@ -1,2 +1,3 @@
 # Aging Trajectories and Age-Related Effects
-A repository containing the required materials and scripts for the project examining methods that differentiate 'age-related' effects and 'aging' effects
+
+Age-related effects can be thought of as average demographic differences between young and old individuals and are estimated from cross-sectional sampling. Conversely, aging effects/trajectories refer to within-individual changes as a result of increased age and can only be estimated from longitudinal data that track changes per individual over time. However, simply used mixed effects models that account for the non-independence of longitudinal data may not be sufficient for estimating within-individual aging effects. Here, based on van de Pol & Wright (2009) we attempt to statistically distinguish between age-related effects and aging effects.
