@@ -475,6 +475,7 @@ pqlseq_anno$unique_cpg<- paste(pqlseq_anno$chr, pqlseq_anno$cpg_loc, sep="_")
 pqlseq_anno<- pqlseq_anno %>%
   dplyr::relocate(c(anno_class, anno_source, unique_cpg), .after=anno)
 
+#Annotation proportions
 pqlseq_anno$cross_signif<- "Non-Significant"
 pqlseq_anno$cross_signif[pqlseq_anno$fdr_long_cross < 0.05 & pqlseq_anno$beta_long_cross < 0]<- "Age-Hypomethylated"
 pqlseq_anno$cross_signif[pqlseq_anno$fdr_long_cross < 0.05 & pqlseq_anno$beta_long_cross > 0]<- "Age-Hypermethylated"
@@ -482,41 +483,67 @@ pqlseq_anno$cross_signif[pqlseq_anno$fdr_long_cross < 0.05 & pqlseq_anno$beta_lo
 pqlseq_anno$cross_signif<- factor(pqlseq_anno$cross_signif, 
                         levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-d1<- pqlseq_anno %>% 
-  distinct(unique_cpg, .keep_all = T) %>%
-  group_by(anno_class, cross_signif) %>% 
-  summarise(count = n()) %>% 
-  mutate(perc = count/sum(count))
+pqlseq_anno$chron_signif<- "Non-Significant"
+pqlseq_anno$chron_signif[pqlseq_anno$fdr_chron_age < 0.05 & pqlseq_anno$beta_chron_age < 0]<- "Age-Hypomethylated"
+pqlseq_anno$chron_signif[pqlseq_anno$fdr_chron_age < 0.05 & pqlseq_anno$beta_chron_age > 0]<- "Age-Hypermethylated"
 
-d2<- pqlseq_anno %>%
-  mutate(unique_cpg = paste(chr, cpg_loc, sep="_")) %>%
-  distinct(unique_cpg, .keep_all = T) %>%
-  group_by(signif) %>%
-  summarise(count = n()) %>%
-  mutate(perc = count/sum(count))
+pqlseq_anno$chron_signif<- factor(pqlseq_anno$chron_signif, 
+                                  levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-d2$anno_class<- "All"
+pqlseq_anno$within_signif<- "Non-Significant"
+pqlseq_anno$within_signif[pqlseq_anno$fdr_within_age < 0.05 & pqlseq_anno$beta_within_age < 0]<- "Age-Hypomethylated"
+pqlseq_anno$within_signif[pqlseq_anno$fdr_within_age < 0.05 & pqlseq_anno$beta_within_age > 0]<- "Age-Hypermethylated"
 
-d3<- rbind(d1, d2)
-annos2<- unique(d3$anno_class)
-d3$anno_class<- factor(d3$anno_class, levels = annos2)
+pqlseq_anno$within_signif<- factor(pqlseq_anno$within_signif, 
+                                  levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-d3 %>%
-  ggplot(aes(x = perc*100, y=anno_class, fill = factor(signif))) +
-  geom_bar(stat="identity", width = 0.7, colour="black") +
-  #geom_text(label=df$count, hjust=-5) +
-  geom_vline(xintercept = 50, linetype = 'dashed') +
-  geom_vline(xintercept = 41.4, linetype = 'dashed') +
-  theme_classic(base_size=32) +
-  theme(legend.position = "none") +
-  scale_fill_manual(values = c("hotpink", "gray90", "hotpink3")) +
-  ylab("Annotation") +
-  xlab("Percentage")
+#Plot annotation proportions----------------------------------------------------
+generate_proportion<- function(df, x, c1, c2, c3){
+  
+  d1<- df %>% 
+    distinct(unique_cpg, .keep_all = T) %>%
+    group_by(anno_class, {{x}}) %>% 
+    summarise(count = n()) %>% 
+    mutate(perc = count/sum(count))
+  
+  print(d1)
+  
+  d2<- df %>%
+    distinct(unique_cpg, .keep_all = T) %>%
+    group_by({{x}}) %>%
+    summarise(count = n()) %>%
+    mutate(perc = count/sum(count))
+  
+  d2$anno_class<- "All"
+  
+  d3<- rbind(d1, d2)
+  annos2<- unique(d3$anno_class)
+  d3$anno_class<- factor(d3$anno_class, levels = annos2)
+  
+  col1 <- eval(substitute(x), d2)
+  
+  d3 %>%
+    ggplot(aes(x = perc*100, y=anno_class, fill = factor({{x}}))) +
+    geom_bar(stat="identity", width = 0.7, colour="black") +
+    #geom_text(label=df$count, hjust=-5) +
+    geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
+    geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
+    theme_classic(base_size=32) +
+    theme(legend.position = "none") +
+    scale_fill_manual(values = c(c1, c2, c3)) +
+    ylab("Annotation") +
+    xlab("Percentage")
+  
+}
 
+generate_proportion(pqlseq_anno, cross_signif, "steelblue2", "gray90", "steelblue4")
+
+generate_proportion(pqlseq_anno, within_signif, "purple4", "gray90", "purple1")
+
+generate_proportion(pqlseq_anno, chron_signif, "darkgoldenrod4", "gray90", "darkgoldenrod1")
 
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
-
 
 ######################################
 ###          Hip Flexion           ###
