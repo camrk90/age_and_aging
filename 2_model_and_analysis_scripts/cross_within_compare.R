@@ -497,8 +497,18 @@ pqlseq_anno$within_signif[pqlseq_anno$fdr_within_age < 0.05 & pqlseq_anno$beta_w
 pqlseq_anno$within_signif<- factor(pqlseq_anno$within_signif, 
                                   levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
+pqlseq_anno$direction<- "Non-Significant"
+pqlseq_anno$direction[(pqlseq_anno$beta_within_age < 0 & pqlseq_anno$beta_long_cross < 0) & 
+                        (pqlseq_anno$fdr_within_age < .05 & pqlseq_anno$fdr_long_cross < .05)]<-"Both Negative"
+pqlseq_anno$direction[(pqlseq_anno$beta_within_age > 0 & pqlseq_anno$beta_long_cross > 0) & 
+                        (pqlseq_anno$fdr_within_age < .05 & pqlseq_anno$fdr_long_cross < .05)]<- "Both Positive"
+pqlseq_anno$direction[(pqlseq_anno$beta_within_age < 0 & pqlseq_anno$beta_long_cross > 0) & 
+                        (pqlseq_anno$fdr_within_age < .05 & pqlseq_anno$fdr_long_cross < .05)]<- "Within Negative, Cross Positive"
+pqlseq_anno$direction[(pqlseq_anno$beta_within_age > 0 & pqlseq_anno$beta_long_cross < 0) & 
+                        (pqlseq_anno$fdr_within_age < .05 & pqlseq_anno$fdr_long_cross < .05)]<- "Within Positive, Cross Negative"
+
 #Plot annotation proportions----------------------------------------------------
-generate_proportion<- function(df, x, c1, c2, c3){
+generate_proportion<- function(df, x){
   
   d1<- df %>% 
     distinct(unique_cpg, .keep_all = T) %>%
@@ -522,15 +532,16 @@ generate_proportion<- function(df, x, c1, c2, c3){
   
   col1 <- eval(substitute(x), d2)
   
+  d3$percent<- d3$perc*100
+  
   d3 %>%
-    ggplot(aes(x = perc*100, y=anno_class, fill = factor({{x}}))) +
+    ggplot(aes(x = percent, y=anno_class, fill = factor({{x}}))) +
     geom_bar(stat="identity", width = 0.7, colour="black") +
-    #geom_text(label=df$count, hjust=-5) +
-    geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
-    geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
     theme_classic(base_size=32) +
-    theme(legend.position = "none") +
-    scale_fill_manual(values = c(c1, c2, c3)) +
+    #geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
+    #geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
+    #theme(legend.position = "none") +
+    #scale_fill_manual(values = c(c1, c2, c3)) +
     ylab("Annotation") +
     xlab("Percentage")
   
@@ -541,6 +552,101 @@ generate_proportion(pqlseq_anno, cross_signif, "steelblue2", "gray90", "steelblu
 generate_proportion(pqlseq_anno, within_signif, "purple4", "gray90", "purple1")
 
 generate_proportion(pqlseq_anno, chron_signif, "darkgoldenrod4", "gray90", "darkgoldenrod1")
+
+generate_proportion(pqlseq_anno, within_cross)
+
+
+#Enrichment Analyses------------------------------------------------------------
+
+enrichment<- function(model_df){
+  
+  df_list<- list()
+  
+  for(i in unique(model_df$anno_class)) {
+    
+    df2<- model_df %>%
+      distinct(unique_cpg, .keep_all = T)
+    
+    df3<- model_df %>%
+      distinct(unique_cpg, .keep_all = T) %>%
+      filter(!unique_cpg %in% df2$unique_cpg)
+      
+      #Counts for fdr < 0.05 & cpg is Within Positive, Cross Negative
+      a<- nrow(df2[df2$within_cross == "Cross Age Significant" & df2$anno_class == i,])
+      b<- nrow(df2[df2$within_cross == "Cross Age Significant" & df2$anno_class != i,])
+      
+      #Counts for NOT fdr < 0.05 & cpg is Within Positive, Cross Negative
+      c<- nrow(df2[df2$within_cross != "Cross Age Significant" & df2$anno_class == i,])
+      d<- nrow(df2[df2$within_cross != "Cross Age Significant" & df2$anno_class != i,])
+      
+      #Generate contingency table
+      c_table<- data.frame("Is_Cross" = c(a, b),
+                           "Is_NOT_Cross" = c(c, d),
+                           row.names = c(paste(i, "Y", sep=""), paste(i, "N", sep="")))
+      
+      if (all.equal(sum(c_table), length(unique(model_df$unique_cpg)))){
+        print(paste("Contingency table sum for", i, "matches unique cpg_loc length"))
+     
+      df_list[[length(df_list)+1]] = c_table
+      
+      print(c_table)
+    }
+  }
+  #name table list
+  names(df_list)<- unique(model_df$anno_class)
+  
+  #Fisher test for each table and tidy with broom
+  ft<- lapply(df_list, fisher.test)
+  ft<- lapply(ft, broom::tidy)
+  
+  ft<- do.call(rbind, ft)
+  ft<- ft %>%
+    mutate(annotation = rownames(ft))
+  
+  #FDR p-val adjustment
+  ft<- ft %>%
+    mutate(padj = p.adjust(p.value)) %>%
+    mutate_at(vars(annotation), as.factor)
+  
+  #Log estimates and CIs
+  ft<- ft %>%
+    mutate(log_or = log(estimate),
+           log_ci.lo = log(conf.low),
+           log_ci.hi = log(conf.high))
+  
+  ft$anno_source<- "Repeat Elements"
+  ft$anno_source[ft$annotation == "TSSs" | ft$annotation == "Active Tr." |
+                   ft$annotation == "Enhancers" | ft$annotation == "Quiescent" | 
+                   ft$annotation == "Promoter"]<- "Transcription"
+  ft<- ft %>%
+    arrange(anno_source, log_or)
+  hyper_levels<- as.character(ft$annotation)
+  
+  #Rearrange factors to sort by type then log_or
+  ft$annotation<- factor(ft$annotation, levels = rev(annos))
+  
+  return(ft)
+}
+
+test<- enrichment(pqlseq_anno)
+test$type<- "Within Age"
+test2<- enrichment(pqlseq_anno)
+test2$type<- "Chron Age"
+
+test_full<- rbind(test, test2)
+
+test_full %>%
+  ggplot(aes(x=annotation, y=estimate, fill=type, alpha=padj<0.05)) +
+  geom_col(position = position_dodge(0.5), colour="black") +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  #geom_errorbar(ymin = test$conf.low, ymax = test$conf.high, width = 0.3, position = position_dodge(0.7)) +
+  #scale_fill_manual(values = c("hotpink", "hotpink3")) +
+  theme_classic(base_size = 32) +
+  #theme(legend.position = "none") +
+  #ylim(c(-1, 7)) +
+  ylab("Odds Ratio") +
+  xlab("Annotation") +
+  coord_flip()
 
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")

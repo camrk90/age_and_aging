@@ -56,7 +56,14 @@ run_cs_model<- function(meta){
 #Import metadata----------------------------------------------------------------
 blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt")
 long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
-overlap_lids<- read.table("/scratch/ckelsey4/Cayo_meth/long_lids_overlap.txt")
+
+long_ids<- unique(long_data$monkey_id)
+
+overlap_lids<- blood_metadata[blood_metadata$monkey_id %in% long_ids,]
+
+overlap_lids<- overlap_lids %>%
+  group_by(monkey_id) %>%
+  sample_n(1)
 
 lids_to_remove<- long_data[!long_data$lid_pid %in% overlap_lids$lid_pid,]
 blood_metadata<- blood_metadata[!blood_metadata$lid_pid %in% lids_to_remove$lid_pid,]
