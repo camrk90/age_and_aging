@@ -553,12 +553,12 @@ generate_proportion(pqlseq_anno, within_signif, "purple4", "gray90", "purple1")
 
 generate_proportion(pqlseq_anno, chron_signif, "darkgoldenrod4", "gray90", "darkgoldenrod1")
 
-generate_proportion(pqlseq_anno, within_cross)
+generate_proportion(pqlseq_anno, within_chron)
 
 
 #Enrichment Analyses------------------------------------------------------------
 
-enrichment<- function(model_df){
+enrichment<- function(model_df, cross_type, var_type){
   
   df_list<- list()
   
@@ -572,17 +572,19 @@ enrichment<- function(model_df){
       filter(!unique_cpg %in% df2$unique_cpg)
       
       #Counts for fdr < 0.05 & cpg is Within Positive, Cross Negative
-      a<- nrow(df2[df2$within_cross == "Cross Age Significant" & df2$anno_class == i,])
-      b<- nrow(df2[df2$within_cross == "Cross Age Significant" & df2$anno_class != i,])
+      a<- nrow(df2[df2[[cross_type]] == var_type & df2$anno_class == i,])
+      b<- nrow(df2[df2[[cross_type]] == var_type & df2$anno_class != i,])
       
       #Counts for NOT fdr < 0.05 & cpg is Within Positive, Cross Negative
-      c<- nrow(df2[df2$within_cross != "Cross Age Significant" & df2$anno_class == i,])
-      d<- nrow(df2[df2$within_cross != "Cross Age Significant" & df2$anno_class != i,])
+      c<- nrow(df2[df2[[cross_type]] != var_type & df2$anno_class == i,])
+      d<- nrow(df2[df2[[cross_type]] != var_type & df2$anno_class != i,])
       
       #Generate contingency table
-      c_table<- data.frame("Is_Cross" = c(a, b),
-                           "Is_NOT_Cross" = c(c, d),
+      c_table<- data.frame("x" = c(a, b),
+                           "y" = c(c, d),
                            row.names = c(paste(i, "Y", sep=""), paste(i, "N", sep="")))
+      
+      colnames(c_table) = c(paste("Is", var_type), paste("Is", "NOT", var_type))
       
       if (all.equal(sum(c_table), length(unique(model_df$unique_cpg)))){
         print(paste("Contingency table sum for", i, "matches unique cpg_loc length"))
@@ -625,15 +627,22 @@ enrichment<- function(model_df){
   #Rearrange factors to sort by type then log_or
   ft$annotation<- factor(ft$annotation, levels = rev(annos))
   
+  ft$type<- var_type
+  
   return(ft)
 }
 
-test<- enrichment(pqlseq_anno)
-test$type<- "Within Age"
-test2<- enrichment(pqlseq_anno)
-test2$type<- "Chron Age"
+unique(pqlseq_anno$within_cross)
 
-test_full<- rbind(test, test2)
+both_enrich<- enrichment(pqlseq_anno, "Both Significant")
+within_enrich<- enrichment(pqlseq_anno, "Within Age Significant")
+cross_enrich<- enrichment(pqlseq_anno, "Cross Age Significant")
+
+both_enrich<- enrichment(pqlseq_anno,  "Both Significant")
+within_enrich<- enrichment(pqlseq_anno, "within_chron", "Within Age Significant")
+chron_enrich<- enrichment(pqlseq_anno, "within_chron", "Chron Age Significant")
+
+test_full<- rbind(both_enrich, within_enrich, chron_enrich)
 
 test_full %>%
   ggplot(aes(x=annotation, y=estimate, fill=type, alpha=padj<0.05)) +
