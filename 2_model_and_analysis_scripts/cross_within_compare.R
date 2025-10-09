@@ -84,6 +84,10 @@ age_w_pqlseq<- import_pqlseq(age_w_files, y = 5)
 age_m_files<- 'wb_pqlseq2_mean_age'
 age_m_pqlseq<- import_pqlseq(age_m_files, y = 5)
 
+#Eq. 3
+age_eq3_files<- 'wb_pqlseq2_eq3'
+age_eq3_pqlseq<- import_pqlseq(age_eq3_files, y = 4)
+
 #Rename cols for each df to indicate variable
 colnames(age_w_pqlseq)<- c("outcome", "length", "chr", "chromStart", "chromEnd", "n", 
                            paste(names(age_w_pqlseq[,7:12]), "within", "age", sep = "_"))
@@ -691,6 +695,32 @@ hip_rotation_chron<- lmer(hip_external_rotation_deg ~ age + individual_sex + (1|
 
 summary(hip_rotation_within)[["coefficients"]]
 summary(hip_rotation_chron)[["coefficients"]]
+
+#Eq2 vs Eq3--------------
+age_eq3<- age_eq3_pqlseq %>%
+  select(c(outcome, beta, fdr))
+colnames(age_eq3)<- c("outcome", "eq3_beta", "eq3_fdr")
+age_w<- age_w_pqlseq  %>%
+  select(c(outcome, beta, fdr))
+colnames(age_w)<- c("outcome", "age_w_beta", "age_w_fdr")
+age_w<- age_w[age_w$outcome %in% age_eq3$outcome,]
+age_w<- age_w %>%
+  select(-outcome)
+age_compare<- cbind(age_w, age_eq3)
+
+age_compare %>%
+  #filter(age_w_fdr < .05 & eq3_beta < .05) %>%
+  ggplot(aes(age_w_beta, eq3_beta)) +
+  geom_point(alpha=0.5) +
+  geom_smooth(method = "lm") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  theme_classic(base_size=24)
+
+
+
+
+
 
 
 
