@@ -51,7 +51,7 @@ import_pqlseq<- function(x, y){
 }
 
 ######################################
-###          Import Data           ###
+###        Import Metadata         ###
 ######################################
 #Metadata
 blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt")
@@ -68,6 +68,10 @@ long_data<- long_data %>%
   filter(age_at_sampling > 1) %>%
   dplyr::rename(perc_unique = unique) %>%
   drop_na()
+
+######################################
+###          Import data           ###
+######################################
 
 #Import longitudinal pqlseq files
 setwd('/scratch/ckelsey4/Cayo_meth/glmer_model_compare')
@@ -161,20 +165,36 @@ blood_metadata %>%
   ggplot(aes(age_at_sampling, fill=individual_sex)) +
   geom_histogram(position = "dodge", colour = "black") +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_y_continuous(breaks = seq(0, 30, 5)) +
+  coord_cartesian(ylim = c(0, 30)) +
   scale_fill_manual(values = c("steelblue1", "steelblue4"), name = "Sex") +
-  theme_classic(base_size=24) +
+  theme_classic(base_size=12) +
   ylab("Count") +
   xlab("Age")
+ggsave("/home/ckelsey4/Cayo_meth/age_aging/cross_age.svg", plot = last_plot())
 
 #Longitudinal data distribution
 long_data %>%
   ggplot(aes(age_at_sampling, fill=individual_sex)) +
   geom_histogram(position = "dodge", colour = "black") +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  coord_cartesian(ylim = c(0, 20)) +
   scale_fill_manual(values = c("purple", "purple4"), name = "Sex") +
-  theme_classic(base_size=24) +
+  theme_classic(base_size=12) +
   ylab("Count") +
   xlab("Age")
+
+long_data %>%
+  ggplot(aes(mean.age, fill=individual_sex)) +
+  geom_histogram(position = "dodge", colour = "black") +
+  scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_y_continuous(breaks = seq(0, 30, 5)) +
+  coord_cartesian(ylim = c(0, 30)) +
+  scale_fill_manual(values = c("purple", "purple4"), name = "Sex") +
+  theme_classic(base_size=12) +
+  ylab("Count") +
+  xlab("Mean Age")
 
 long_data<- long_data %>%
   group_by(monkey_id) %>%
