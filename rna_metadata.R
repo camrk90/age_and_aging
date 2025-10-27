@@ -1,4 +1,6 @@
 library(tidyverse)
+library(EMMREML)
+library(lme4)
 
 rna_meta<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_metadata_wELA_18Jul25.rds")
 rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_18Jul25.rds")
@@ -21,6 +23,27 @@ rna_meta$Seq_batch<- factor(rna_meta$Seq_batch, levels = c("1", "2", "3"))
 
 #Subset counts to RIDs in metadata
 rna_counts<- rna_counts[, colnames(rna_counts) %in% rna_meta$Sample_ID]
+
+
+#Run PQLseq for within_age-------------------------------------------------------------
+#Generate model matrix
+predictor_matrix<- model.matrix(~ within_age + mean_age + sex + Seq_batch, data = rna_meta)
+
+re_eq = "y ~ within_age + mean_age + sex + Seq_batch + (1 + within_age|animal_ID)"
+
+rna_meta$y<- 1
+
+re_mat <- lFormula(eval(re_eq), rna_meta)
+re_matZ <- t(as.matrix(re_mat$reTrms$Zt))
+
+test<- emmreml(rna_counts, predictor_matrix, re_matZ, )
+
+
+
+
+
+
+
 
 
 
