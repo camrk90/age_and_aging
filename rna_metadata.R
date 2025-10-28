@@ -29,15 +29,15 @@ rna_counts<- rna_counts[, colnames(rna_counts) %in% rna_meta$Sample_ID]
 #Generate model matrix
 predictor_matrix<- model.matrix(~ within_age + mean_age + sex + Seq_batch, data = rna_meta)
 
-re_eq = "y ~ within_age + mean_age + sex + Seq_batch + (1 + within_age|animal_ID)"
+re_eq = "y ~ within_age + mean_age + sex + Seq_batch + (1|animal_ID)"
 
 rna_meta$y<- 1
 
+#This generates a random intercept matrix with dims 309 x 114
 re_mat <- lFormula(eval(re_eq), rna_meta)
 re_matZ <- t(as.matrix(re_mat$reTrms$Zt))
 
 test<- emmreml(rna_counts, predictor_matrix, re_matZ, )
-
 
 
 
