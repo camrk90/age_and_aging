@@ -25,9 +25,9 @@ rna_meta$Seq_batch<- gsub("batch", "", rna_meta$Seq_batch)
 rna_meta$Seq_batch<- factor(rna_meta$Seq_batch, levels = c("1", "2", "3"))
 
 #Subset counts to RIDs in metadata
-rna_counts<- rna_counts[, colnames(rna_counts) %in% rna_meta$Sample_ID]
+rna_counts<- t(rna_counts[, colnames(rna_counts) %in% rna_meta$Sample_ID])
 
-rna_pca<- prcomp(cor(t(rna_counts), use="pairwise.complete.obs"))
+rna_pca<- prcomp(rna_counts, center = TRUE, scale. = TRUE)
 
 saveRDS(rna_pca, "/home/ckelsey4/Cayo_meth/rna_seq/rna_pca.rds")
 

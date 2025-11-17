@@ -5,6 +5,7 @@ library(ggplot2)
 library(variancePartition)
 library(limma)
 library(edgeR)
+library(ggcorrplot)
 #load("/home/ckelsey4/Cayo_meth/rna_compare.RData")
 
 rna_meta_full<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_metadata_wELA_18Jul25.rds")
@@ -56,32 +57,6 @@ vp<- fitExtractVarPartModel(t(rna_counts), vp_model, rna_meta)
 plotVarPart(vp)
 plotPercentBars(vp[1:10, ])
 
-#PCA----------------------------------------------------------------------------
-rna_pca<- prcomp(cor(t(rna_counts), use="pairwise.complete.obs"))
-summary(rna_pca)
-
-pcs<- as.data.frame(rna_pca$x) 
-
-#Check which pca's explain the most variance
-summary(rna_pca)$importance[2, ]
-
-pcs<- cbind(pcs[1:5], 
-            dplyr::select(blood_metadata, 
-                          c("age_at_sampling", "sex", "pid", "prep_date", "prep_year", 
-                            "percent_mapped", "log_unique", "conversion_rate", "university", "global_meth")))
-
-pcs %>% ggplot(aes(x = pid, y = age_at_sampling)) +
-  geom_boxplot()
-
-pcs %>% ggplot(aes(x = prep_year, y = age_at_sampling)) +
-  geom_boxplot()
-
-blood_metadata$university<- factor(blood_metadata$university, levels = c("uw", "asu"))
-
-pc.matrix<- model.matrix(~ PC1 + PC2 + PC3 + age_at_sampling + sex + university + global_meth, data = pcs)
-pc.matrix[, 2:8] %>% 
-  cor(use="pairwise.complete.obs") %>%
-  ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=2)
 
 #Normalize RNA Count Data-------------------------------------------------------
 m_matrix <- model.matrix(~ within_age + mean_age + sex + Seq_batch, rna_meta)
@@ -90,6 +65,27 @@ rna_norm<- rna_norm[["E"]]
 colnames(rna_norm)<- colnames(rna_counts)
 rownames(rna_norm)<- rownames(rna_counts)
 rna_norm<- t(rna_norm)
+
+#PCA----------------------------------------------------------------------------
+rna_pca<- prcomp(rna_norm, center = TRUE, scale. = TRUE)
+
+pcs<- as.data.frame(rna_pca$x) 
+
+#Check which pca's explain the most variance
+summary(rna_pca)$importance[2, ]
+
+pcs<- cbind(pcs[1:5], rna_meta)
+
+pcs %>% ggplot(aes(x = pid, y = age_at_sampling)) +
+  geom_boxplot()
+
+pcs %>% ggplot(aes(x = prep_year, y = age_at_sampling)) +
+  geom_boxplot()
+
+pc.matrix<- model.matrix(~ PC1 + PC2 + PC3 + PC4 + PC5 + trapped_age + within_age + mean_age + sex + Seq_batch, data = pcs)
+pc.matrix %>% 
+  cor(use="pairwise.complete.obs") %>%
+  ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=2)
 
 #Run EMMA for within_age--------------------------------------------------------
 #Generate model matrix
