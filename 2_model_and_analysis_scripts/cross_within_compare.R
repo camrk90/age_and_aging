@@ -2,8 +2,10 @@ library(tidyverse)
 library(ggplot2)
 library(ggcorrplot)
 library(ggvenn)
-library(variancePartition)
+library(ggeffects)
+#library(variancePartition)
 library(lme4)
+
 load("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
 
 #Define import function
@@ -532,7 +534,7 @@ pqlseq_anno$direction[(pqlseq_anno$beta_within_age > 0 & pqlseq_anno$beta_long_c
                         (pqlseq_anno$fdr_within_age < .05 & pqlseq_anno$fdr_long_cross < .05)]<- "Within Positive, Cross Negative"
 
 #Plot annotation proportions----------------------------------------------------
-generate_proportion<- function(df, x){
+generate_proportion<- function(df, x, c1, c2, c3){
   
   d1<- df %>% 
     distinct(unique_cpg, .keep_all = T) %>%
@@ -562,10 +564,10 @@ generate_proportion<- function(df, x){
     ggplot(aes(x = percent, y=anno_class, fill = factor({{x}}))) +
     geom_bar(stat="identity", width = 0.7, colour="black") +
     theme_classic(base_size=32) +
-    #geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
-    #geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
+    geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
+    geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
     #theme(legend.position = "none") +
-    #scale_fill_manual(values = c(c1, c2, c3)) +
+    scale_fill_manual(values = c(c1, c2, c3)) +
     ylab("Annotation") +
     xlab("Percentage")
   
@@ -594,12 +596,10 @@ enrichment<- function(model_df, cross_type, var_type){
     df3<- model_df %>%
       distinct(unique_cpg, .keep_all = T) %>%
       filter(!unique_cpg %in% df2$unique_cpg)
-      
-      #Counts for fdr < 0.05 & cpg is Within Positive, Cross Negative
+    
       a<- nrow(df2[df2[[cross_type]] == var_type & df2$anno_class == i,])
       b<- nrow(df2[df2[[cross_type]] == var_type & df2$anno_class != i,])
       
-      #Counts for NOT fdr < 0.05 & cpg is Within Positive, Cross Negative
       c<- nrow(df2[df2[[cross_type]] != var_type & df2$anno_class == i,])
       d<- nrow(df2[df2[[cross_type]] != var_type & df2$anno_class != i,])
       
@@ -656,24 +656,25 @@ enrichment<- function(model_df, cross_type, var_type){
   return(ft)
 }
 
-unique(pqlseq_anno$within_cross)
 
-both_enrich<- enrichment(pqlseq_anno, "Both Significant")
-within_enrich<- enrichment(pqlseq_anno, "Within Age Significant")
-cross_enrich<- enrichment(pqlseq_anno, "Cross Age Significant")
 
-both_enrich<- enrichment(pqlseq_anno,  "Both Significant")
+#both_enrich<- enrichment(pqlseq_anno, "Both Significant")
+#within_enrich<- enrichment(pqlseq_anno, "Within Age Significant")
+#cross_enrich<- enrichment(pqlseq_anno, "Cross Age Significant")
+
+both_enrich<- enrichment(pqlseq_anno, "within_chron",  "Both Significant")
 within_enrich<- enrichment(pqlseq_anno, "within_chron", "Within Age Significant")
 chron_enrich<- enrichment(pqlseq_anno, "within_chron", "Chron Age Significant")
 
 test_full<- rbind(both_enrich, within_enrich, chron_enrich)
 
 test_full %>%
-  ggplot(aes(x=annotation, y=estimate, fill=type, alpha=padj<0.05)) +
+  filter(type != "Both Significant") %>%
+  ggplot(aes(x=annotation, y=log_or, fill=type, alpha=padj<0.05)) +
   geom_col(position = position_dodge(0.5), colour="black") +
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  #geom_errorbar(ymin = test$conf.low, ymax = test$conf.high, width = 0.3, position = position_dodge(0.7)) +
-  #scale_fill_manual(values = c("hotpink", "hotpink3")) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  #geom_errorbar(ymin = test_full$log_ci.lo, ymax = test_full$log_ci.hi, width = 0.3, position = position_dodge(0.5)) +
+  scale_fill_manual(values = c('steelblue2', 'purple')) +
   theme_classic(base_size = 32) +
   #theme(legend.position = "none") +
   #ylim(c(-1, 7)) +
@@ -681,60 +682,89 @@ test_full %>%
   xlab("Annotation") +
   coord_flip()
 
+
+#Within vs Chron enrichment
+
+df_list<- list()
+
+for(i in unique(pqlseq_anno$anno_class)) {
+  
+  df2<- pqlseq_anno %>%
+    distinct(unique_cpg, .keep_all = T)
+  
+  df3<- pqlseq_anno %>%
+    distinct(unique_cpg, .keep_all = T) %>%
+    filter(!unique_cpg %in% df2$unique_cpg)
+  
+  #Counts for fdr < 0.05 & cpg is Within Positive, Cross Negative
+  a<- nrow(df2[df2$fdr_chron_age > .05 | df2$fdr_within_age < .05 & df2$anno_class == i,])
+  b<- nrow(df2[df2$fdr_chron_age > .05 | df2$fdr_within_age < .05 & df2$anno_class != i,])
+  
+  #Counts for NOT fdr < 0.05 & cpg is Within Positive, Cross Negative
+  c<- nrow(df2[df2$fdr_chron_age < .05 | df2$fdr_within_age < .05 & df2$anno_class == i,])
+  d<- nrow(df2[df2$fdr_chron_age < .05 | df2$fdr_within_age < .05 != i,])
+  
+  #Generate contingency table
+  c_table<- data.frame("x" = c(a, b),
+                       "y" = c(c, d),
+                       row.names = c(paste(i, "Y", sep=""), paste(i, "N", sep="")))
+  
+  colnames(c_table) = c(paste("Is", var_type), paste("Is", "NOT", var_type))
+  
+  if (all.equal(sum(c_table), length(unique(model_df$unique_cpg)))){
+    print(paste("Contingency table sum for", i, "matches unique cpg_loc length"))
+    
+    df_list[[length(df_list)+1]] = c_table
+    
+    print(c_table)
+  }
+}
+#name table list
+names(df_list)<- unique(model_df$anno_class)
+
+
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
 
-######################################
-###          Hip Flexion           ###
-######################################
-
-hip_flexion<- blood_metadata<- read_csv("/scratch/ckelsey4/Cayo_meth/hip_flexion.csv", col_names = T)
-hip_flexion<- hip_flexion %>%
-  group_by(individual_code) %>%
-  mutate(n = n()) %>%
-  filter(n > 1) %>%
-  mutate(between_age = mean(age),
-         within_age = age - between_age) %>%
-  relocate(within_age, .after = age) %>%
-  relocate(between_age, .after = within_age)
-
-hip_extension_within<- lmer(hip_extension_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                            data = hip_flexion)
-
-hip_extension_chron<- lmer(hip_extension_deg ~ age + individual_sex + (1|individual_code), 
-                           data = hip_flexion)
-
-summary(hip_extension_within)[["coefficients"]]
-summary(hip_extension_chron)[["coefficients"]]
-
-hip_rotation_within<- lmer(hip_external_rotation_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                           data = hip_flexion)
-
-hip_rotation_chron<- lmer(hip_external_rotation_deg ~ age + individual_sex + (1|individual_code), 
-                          data = hip_flexion)
-
-summary(hip_rotation_within)[["coefficients"]]
-summary(hip_rotation_chron)[["coefficients"]]
+c_table<- data.frame("x" = c("a", "b"),
+                     "y" = c("c", "d"),
+                     row.names = c(paste("a", "Y", sep="_"), paste("a", "N", sep="_")))
 
 #Eq2 vs Eq3--------------
 age_eq3<- age_eq3_pqlseq %>%
   select(c(outcome, beta, fdr))
 colnames(age_eq3)<- c("outcome", "eq3_beta", "eq3_fdr")
 age_w<- age_w_pqlseq  %>%
-  select(c(outcome, beta, fdr))
+  select(c(outcome, beta_within_age, fdr_within_age))
 colnames(age_w)<- c("outcome", "age_w_beta", "age_w_fdr")
 age_w<- age_w[age_w$outcome %in% age_eq3$outcome,]
+age_eq3<- age_eq3[age_eq3$outcome %in% age_w$outcome,]
 age_w<- age_w %>%
   select(-outcome)
 age_compare<- cbind(age_w, age_eq3)
+age_compare<- age_compare %>%
+  mutate(diff = abs(age_w_beta) - abs(eq3_beta))
 
 age_compare %>%
-  #filter(age_w_fdr < .05 & eq3_beta < .05) %>%
-  ggplot(aes(age_w_beta, eq3_beta)) +
+  #filter(age_w_fdr < .05 & eq3_fdr < .05) %>%
+  ggplot(aes(age_w_beta, eq3_beta, colour=diff)) +
   geom_point(alpha=0.5) +
   geom_smooth(method = "lm") +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_color_gradient2(low = "blue4", mid = "grey70", high = "green4", midpoint = 0, name = "") +
+  theme_classic(base_size=24) +
+  xlab("Eq2 Beta") +
+  ylab("Eq3 Beta")
+
+cor(age_compare$age_w_beta, age_compare$eq3_beta, method = "pearson")
+
+age_compare %>%
+  #filter(age_w_fdr < .05 & eq3_fdr < .05) %>%
+  ggplot(aes(abs_diff, fill=after_stat(x))) +
+  geom_histogram(colour='black') +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_fill_gradient2(low = "blue4", mid = "grey70", high = "green4", midpoint = 0, name = "") +
   theme_classic(base_size=24)
 
 
