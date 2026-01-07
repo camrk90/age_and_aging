@@ -2,8 +2,10 @@ library(tidyverse)
 library(ggplot2)
 library(ggcorrplot)
 library(ggvenn)
-library(variancePartition)
+library(ggeffects)
+#library(variancePartition)
 library(lme4)
+
 load("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
 
 #Define import function
@@ -51,7 +53,7 @@ import_pqlseq<- function(x, y){
 }
 
 ######################################
-###          Import Data           ###
+###        Import Metadata         ###
 ######################################
 #Metadata
 blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt")
@@ -69,6 +71,10 @@ long_data<- long_data %>%
   dplyr::rename(perc_unique = unique) %>%
   drop_na()
 
+######################################
+###          Import data           ###
+######################################
+
 #Import longitudinal pqlseq files
 setwd('/scratch/ckelsey4/Cayo_meth/glmer_model_compare')
 
@@ -83,6 +89,10 @@ age_w_pqlseq<- import_pqlseq(age_w_files, y = 5)
 #Mean Age
 age_m_files<- 'wb_pqlseq2_mean_age'
 age_m_pqlseq<- import_pqlseq(age_m_files, y = 5)
+
+#Eq. 3
+age_eq3_files<- 'wb_pqlseq2_eq3'
+age_eq3_pqlseq<- import_pqlseq(age_eq3_files, y = 4)
 
 #Rename cols for each df to indicate variable
 colnames(age_w_pqlseq)<- c("outcome", "length", "chr", "chromStart", "chromEnd", "n", 
@@ -157,20 +167,36 @@ blood_metadata %>%
   ggplot(aes(age_at_sampling, fill=individual_sex)) +
   geom_histogram(position = "dodge", colour = "black") +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_y_continuous(breaks = seq(0, 30, 5)) +
+  coord_cartesian(ylim = c(0, 30)) +
   scale_fill_manual(values = c("steelblue1", "steelblue4"), name = "Sex") +
-  theme_classic(base_size=24) +
+  theme_classic(base_size=12) +
   ylab("Count") +
   xlab("Age")
+ggsave("/home/ckelsey4/Cayo_meth/age_aging/cross_age.svg", plot = last_plot())
 
 #Longitudinal data distribution
 long_data %>%
   ggplot(aes(age_at_sampling, fill=individual_sex)) +
   geom_histogram(position = "dodge", colour = "black") +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_y_continuous(breaks = seq(0, 20, 5)) +
+  coord_cartesian(ylim = c(0, 20)) +
   scale_fill_manual(values = c("purple", "purple4"), name = "Sex") +
-  theme_classic(base_size=24) +
+  theme_classic(base_size=12) +
   ylab("Count") +
   xlab("Age")
+
+long_data %>%
+  ggplot(aes(mean.age, fill=individual_sex)) +
+  geom_histogram(position = "dodge", colour = "black") +
+  scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_y_continuous(breaks = seq(0, 30, 5)) +
+  coord_cartesian(ylim = c(0, 30)) +
+  scale_fill_manual(values = c("purple", "purple4"), name = "Sex") +
+  theme_classic(base_size=12) +
+  ylab("Count") +
+  xlab("Mean Age")
 
 long_data<- long_data %>%
   group_by(monkey_id) %>%
@@ -508,7 +534,7 @@ pqlseq_anno$direction[(pqlseq_anno$beta_within_age > 0 & pqlseq_anno$beta_long_c
                         (pqlseq_anno$fdr_within_age < .05 & pqlseq_anno$fdr_long_cross < .05)]<- "Within Positive, Cross Negative"
 
 #Plot annotation proportions----------------------------------------------------
-generate_proportion<- function(df, x){
+generate_proportion<- function(df, x, c1, c2, c3){
   
   d1<- df %>% 
     distinct(unique_cpg, .keep_all = T) %>%
@@ -538,10 +564,10 @@ generate_proportion<- function(df, x){
     ggplot(aes(x = percent, y=anno_class, fill = factor({{x}}))) +
     geom_bar(stat="identity", width = 0.7, colour="black") +
     theme_classic(base_size=32) +
-    #geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
-    #geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
+    geom_vline(xintercept = (1-d2$perc[col1 == "Age-Hypermethylated"])*100, linetype = 'dashed') +
+    geom_vline(xintercept = d2$perc[col1 == "Age-Hypomethylated"]*100, linetype = 'dashed') +
     #theme(legend.position = "none") +
-    #scale_fill_manual(values = c(c1, c2, c3)) +
+    scale_fill_manual(values = c(c1, c2, c3)) +
     ylab("Annotation") +
     xlab("Percentage")
   
@@ -553,12 +579,12 @@ generate_proportion(pqlseq_anno, within_signif, "purple4", "gray90", "purple1")
 
 generate_proportion(pqlseq_anno, chron_signif, "darkgoldenrod4", "gray90", "darkgoldenrod1")
 
-generate_proportion(pqlseq_anno, within_cross)
+generate_proportion(pqlseq_anno, within_chron)
 
 
 #Enrichment Analyses------------------------------------------------------------
 
-enrichment<- function(model_df){
+enrichment<- function(model_df, cross_type, var_type){
   
   df_list<- list()
   
@@ -570,19 +596,19 @@ enrichment<- function(model_df){
     df3<- model_df %>%
       distinct(unique_cpg, .keep_all = T) %>%
       filter(!unique_cpg %in% df2$unique_cpg)
+    
+      a<- nrow(df2[df2[[cross_type]] == var_type & df2$anno_class == i,])
+      b<- nrow(df2[df2[[cross_type]] == var_type & df2$anno_class != i,])
       
-      #Counts for fdr < 0.05 & cpg is Within Positive, Cross Negative
-      a<- nrow(df2[df2$within_cross == "Cross Age Significant" & df2$anno_class == i,])
-      b<- nrow(df2[df2$within_cross == "Cross Age Significant" & df2$anno_class != i,])
-      
-      #Counts for NOT fdr < 0.05 & cpg is Within Positive, Cross Negative
-      c<- nrow(df2[df2$within_cross != "Cross Age Significant" & df2$anno_class == i,])
-      d<- nrow(df2[df2$within_cross != "Cross Age Significant" & df2$anno_class != i,])
+      c<- nrow(df2[df2[[cross_type]] != var_type & df2$anno_class == i,])
+      d<- nrow(df2[df2[[cross_type]] != var_type & df2$anno_class != i,])
       
       #Generate contingency table
-      c_table<- data.frame("Is_Cross" = c(a, b),
-                           "Is_NOT_Cross" = c(c, d),
+      c_table<- data.frame("x" = c(a, b),
+                           "y" = c(c, d),
                            row.names = c(paste(i, "Y", sep=""), paste(i, "N", sep="")))
+      
+      colnames(c_table) = c(paste("Is", var_type), paste("Is", "NOT", var_type))
       
       if (all.equal(sum(c_table), length(unique(model_df$unique_cpg)))){
         print(paste("Contingency table sum for", i, "matches unique cpg_loc length"))
@@ -625,22 +651,30 @@ enrichment<- function(model_df){
   #Rearrange factors to sort by type then log_or
   ft$annotation<- factor(ft$annotation, levels = rev(annos))
   
+  ft$type<- var_type
+  
   return(ft)
 }
 
-test<- enrichment(pqlseq_anno)
-test$type<- "Within Age"
-test2<- enrichment(pqlseq_anno)
-test2$type<- "Chron Age"
 
-test_full<- rbind(test, test2)
+
+#both_enrich<- enrichment(pqlseq_anno, "Both Significant")
+#within_enrich<- enrichment(pqlseq_anno, "Within Age Significant")
+#cross_enrich<- enrichment(pqlseq_anno, "Cross Age Significant")
+
+both_enrich<- enrichment(pqlseq_anno, "within_chron",  "Both Significant")
+within_enrich<- enrichment(pqlseq_anno, "within_chron", "Within Age Significant")
+chron_enrich<- enrichment(pqlseq_anno, "within_chron", "Chron Age Significant")
+
+test_full<- rbind(both_enrich, within_enrich, chron_enrich)
 
 test_full %>%
-  ggplot(aes(x=annotation, y=estimate, fill=type, alpha=padj<0.05)) +
+  filter(type != "Both Significant") %>%
+  ggplot(aes(x=annotation, y=log_or, fill=type, alpha=padj<0.05)) +
   geom_col(position = position_dodge(0.5), colour="black") +
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  #geom_errorbar(ymin = test$conf.low, ymax = test$conf.high, width = 0.3, position = position_dodge(0.7)) +
-  #scale_fill_manual(values = c("hotpink", "hotpink3")) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  #geom_errorbar(ymin = test_full$log_ci.lo, ymax = test_full$log_ci.hi, width = 0.3, position = position_dodge(0.5)) +
+  scale_fill_manual(values = c('steelblue2', 'purple')) +
   theme_classic(base_size = 32) +
   #theme(legend.position = "none") +
   #ylim(c(-1, 7)) +
@@ -648,40 +682,95 @@ test_full %>%
   xlab("Annotation") +
   coord_flip()
 
+
+#Within vs Chron enrichment
+
+df_list<- list()
+
+for(i in unique(pqlseq_anno$anno_class)) {
+  
+  df2<- pqlseq_anno %>%
+    distinct(unique_cpg, .keep_all = T)
+  
+  df3<- pqlseq_anno %>%
+    distinct(unique_cpg, .keep_all = T) %>%
+    filter(!unique_cpg %in% df2$unique_cpg)
+  
+  #Counts for fdr < 0.05 & cpg is Within Positive, Cross Negative
+  a<- nrow(df2[df2$fdr_chron_age > .05 | df2$fdr_within_age < .05 & df2$anno_class == i,])
+  b<- nrow(df2[df2$fdr_chron_age > .05 | df2$fdr_within_age < .05 & df2$anno_class != i,])
+  
+  #Counts for NOT fdr < 0.05 & cpg is Within Positive, Cross Negative
+  c<- nrow(df2[df2$fdr_chron_age < .05 | df2$fdr_within_age < .05 & df2$anno_class == i,])
+  d<- nrow(df2[df2$fdr_chron_age < .05 | df2$fdr_within_age < .05 != i,])
+  
+  #Generate contingency table
+  c_table<- data.frame("x" = c(a, b),
+                       "y" = c(c, d),
+                       row.names = c(paste(i, "Y", sep=""), paste(i, "N", sep="")))
+  
+  colnames(c_table) = c(paste("Is", var_type), paste("Is", "NOT", var_type))
+  
+  if (all.equal(sum(c_table), length(unique(model_df$unique_cpg)))){
+    print(paste("Contingency table sum for", i, "matches unique cpg_loc length"))
+    
+    df_list[[length(df_list)+1]] = c_table
+    
+    print(c_table)
+  }
+}
+#name table list
+names(df_list)<- unique(model_df$anno_class)
+
+
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
 
-######################################
-###          Hip Flexion           ###
-######################################
+c_table<- data.frame("x" = c("a", "b"),
+                     "y" = c("c", "d"),
+                     row.names = c(paste("a", "Y", sep="_"), paste("a", "N", sep="_")))
 
-hip_flexion<- blood_metadata<- read_csv("/scratch/ckelsey4/Cayo_meth/hip_flexion.csv", col_names = T)
-hip_flexion<- hip_flexion %>%
-  group_by(individual_code) %>%
-  mutate(n = n()) %>%
-  filter(n > 1) %>%
-  mutate(between_age = mean(age),
-         within_age = age - between_age) %>%
-  relocate(within_age, .after = age) %>%
-  relocate(between_age, .after = within_age)
+#Eq2 vs Eq3--------------
+age_eq3<- age_eq3_pqlseq %>%
+  select(c(outcome, beta, fdr))
+colnames(age_eq3)<- c("outcome", "eq3_beta", "eq3_fdr")
+age_w<- age_w_pqlseq  %>%
+  select(c(outcome, beta_within_age, fdr_within_age))
+colnames(age_w)<- c("outcome", "age_w_beta", "age_w_fdr")
+age_w<- age_w[age_w$outcome %in% age_eq3$outcome,]
+age_eq3<- age_eq3[age_eq3$outcome %in% age_w$outcome,]
+age_w<- age_w %>%
+  select(-outcome)
+age_compare<- cbind(age_w, age_eq3)
+age_compare<- age_compare %>%
+  mutate(diff = abs(age_w_beta) - abs(eq3_beta))
 
-hip_extension_within<- lmer(hip_extension_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                            data = hip_flexion)
+age_compare %>%
+  #filter(age_w_fdr < .05 & eq3_fdr < .05) %>%
+  ggplot(aes(age_w_beta, eq3_beta, colour=diff)) +
+  geom_point(alpha=0.5) +
+  geom_smooth(method = "lm") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_color_gradient2(low = "blue4", mid = "grey70", high = "green4", midpoint = 0, name = "") +
+  theme_classic(base_size=24) +
+  xlab("Eq2 Beta") +
+  ylab("Eq3 Beta")
 
-hip_extension_chron<- lmer(hip_extension_deg ~ age + individual_sex + (1|individual_code), 
-                           data = hip_flexion)
+cor(age_compare$age_w_beta, age_compare$eq3_beta, method = "pearson")
 
-summary(hip_extension_within)[["coefficients"]]
-summary(hip_extension_chron)[["coefficients"]]
+age_compare %>%
+  #filter(age_w_fdr < .05 & eq3_fdr < .05) %>%
+  ggplot(aes(abs_diff, fill=after_stat(x))) +
+  geom_histogram(colour='black') +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_fill_gradient2(low = "blue4", mid = "grey70", high = "green4", midpoint = 0, name = "") +
+  theme_classic(base_size=24)
 
-hip_rotation_within<- lmer(hip_external_rotation_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                           data = hip_flexion)
 
-hip_rotation_chron<- lmer(hip_external_rotation_deg ~ age + individual_sex + (1|individual_code), 
-                          data = hip_flexion)
 
-summary(hip_rotation_within)[["coefficients"]]
-summary(hip_rotation_chron)[["coefficients"]]
+
+
 
 
 
