@@ -63,16 +63,43 @@ hip_flexion$age<- round(hip_flexion$age, 0)
 
 hip_flexion %>%
   ggplot(aes(x=age, y=reorder(individual_code, min_age), colour=as.factor(individual_sex))) +
-  geom_path(linewidth = 1.2, alpha = 0.8) +
+  geom_path(linewidth = 1.5, alpha = 0.8) +
   geom_point(colour="black", size = 0.5) +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
-  scale_colour_manual(values = c("green4", "purple4"), name = "Sex") +
+  scale_colour_manual(values = c("red3", "pink2"), name = "Sex") +
   ylab("Individual") +
   xlab("Age") +
   theme_classic(base_size = 24) +
   theme(axis.text.y=element_blank(),
-        axis.ticks.y=element_blank())
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=3))
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/morph_samples.svg", height = 100, width = 87, units = "mm")
+
+hip_flexion %>%
+  ggplot(aes(x=age, fill=as.factor(individual_sex))) +
+  geom_bar(colour='black', position = 'dodge') +
+  scale_x_continuous(breaks = seq(0, 30, by=5)) +
+  scale_fill_manual(values = c("red3", "pink2"), name = "Sex") +
+  ylab("Count") +
+  xlab("Age") +
+  theme_classic(base_size = 24) +
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=3))
+
+hip_flexion %>%
+  ggplot(aes(x=n, fill=as.factor(individual_sex))) +
+  geom_bar(colour='black', position = 'dodge') +
+  scale_fill_manual(values = c("red3", "pink2"), name = "Sex") +
+  ylab("Count") +
+  xlab("N Samples") +
+  theme_classic(base_size = 24) +
+  theme(axis.text.y=element_blank(),
+        axis.ticks.y=element_blank()) +
+  theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=3))
 
 hip_flexion %>%
   filter(hip_extension_deg > 50) %>%
@@ -90,11 +117,8 @@ ext_range<- hip_flexion %>%
 ext_range<- ext_range %>%
   mutate(diff = min - max)
 
-#Can't remember why I made this filter so I'm taking it out until I figure it out
-#hip_ext<- hip_flexion %>%
-  #filter(hip_extension_deg > 50)
-
-hip_ext<- hip_flexion
+hip_ext<- hip_flexion %>%
+  filter(hip_extension_deg > 100)
 
 hip_extension_chron<- lmer(hip_extension_deg ~ age + individual_sex + (1|individual_code), 
                            data = hip_ext)
@@ -106,8 +130,13 @@ hip_extension_eq3<- lmer(hip_extension_deg ~ age + between_age + individual_sex 
                          data = hip_ext)
 
 summary(hip_extension_chron)[["coefficients"]]
-summary(hip_extension_eq3)[["coefficients"]]
 summary(hip_extension_within)[["coefficients"]]
+summary(hip_extension_eq3)[["coefficients"]]
+
+ext_coefs<- as.data.frame(rbind(summary(hip_extension_chron)[["coefficients"]], summary(hip_extension_within)[["coefficients"]],
+                                summary(hip_extension_eq3)[["coefficients"]]))
+
+ext_coefs<- ext_coefs[c("age", "within_age", "between_age", "age.1", "between_age.1"),]
 
 chron_fm<- predict_response(hip_extension_chron, "age")
 chron_re<- predict_response(hip_extension_chron, terms = c("age", "individual_code"), type = "random")
@@ -136,27 +165,15 @@ ggplot() +
                   y = predicted),
               color = 'steelblue2',
               method="lm",
-              se = F) +
-  geom_smooth(data = eq3_fm,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'purple',
-              method="lm",
-              se = F) +
-  geom_smooth(data = eq3_between_fm,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'chartreuse3',
-              method="lm",
-              se = F) +
+              se = F,
+              linewidth = 3) +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
   theme(legend.position = "none") +
   theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.title = element_text(vjust = -5)) +
+  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
   ylab("Hip Extension Deg.") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
@@ -213,9 +230,70 @@ flexion_predicted_within<- predict_response(hip_flexion_within, "within_age")
 re.flexion_predicted_within<- predict_response(hip_flexion_within, 
                                                terms = c("within_age", "individual_code"), type = "random")
 
+ggplot() + 
+  geom_point(data = hip_flexion, 
+             inherit.aes=F,
+             aes(x = age,
+                 y = hip_flexion_deg), 
+             cex = 1,
+             shape = 1,
+             alpha = 0.8) +
+  geom_smooth(data = flexion_predicted_chron,
+              inherit.aes=F,
+              aes(x = x,
+                  y = predicted),
+              color = 'steelblue2',
+              method="lm",
+              se = F) +
+  geom_smooth(data = flexion_predicted_eq3,
+              inherit.aes=F,
+              aes(x = x,
+                  y = predicted),
+              color = 'purple',
+              method="lm",
+              se = F) +
+  geom_smooth(data = flexion_predicted_eq3,
+              inherit.aes=F,
+              aes(x = x,
+                  y = predicted),
+              color = 'green4',
+              method="lm",
+              se = F,
+              linetype = "dashed") +
+  theme_classic(base_size = 18) + 
+  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
+  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
+  theme(axis.title = element_text(vjust = -5)) +
+  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
+  xlab("Age") +
+  ylab("Hip Flexion Deg.") +
+  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
+
 #Generate plots
 chron_flexion<- plot_slopes(flexion_predicted_chron, re.flexion_predicted_chron, 
                             hip_flexion, age, hip_flexion_deg)
+
+ggplot() + 
+  geom_point(data = hip_flexion, 
+             inherit.aes=F,
+             aes(x = age,
+                 y = hip_flexion_deg), 
+             cex = 1,
+             shape = 1,
+             alpha = 0.8) +
+  theme_classic(base_size = 18) + 
+  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
+  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
+  theme(axis.title = element_text(vjust = -5)) +
+  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
+  xlab("Age") +
+  ylab("Hip Flexion Deg.") +
+  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
+
 chron_flexion +
   xlab("Age") +
   ylab("Hip Flexion Deg.") +
@@ -289,6 +367,11 @@ summary(hip_int_rotation_within)[["coefficients"]]
 summary(hip_int_rotation_eq3)[["coefficients"]]
 summary(hip_int_rotation_chron)[["coefficients"]]
 
+int_coefs<- as.data.frame(rbind(summary(hip_int_rotation_chron)[["coefficients"]], summary(hip_int_rotation_within)[["coefficients"]],
+                                summary(hip_int_rotation_eq3)[["coefficients"]]))
+
+int_coefs<- int_coefs[c("age", "within_age", "between_age", "age.1", "between_age.1"),]
+
 fm.dat.chron<- predict_response(hip_int_rotation_chron, "age")
 re.dat.chron<- predict_response(hip_int_rotation_chron, terms = c("age", "individual_code"), type = "random")
 
@@ -313,27 +396,15 @@ ggplot() +
                   y = predicted),
               color = 'steelblue2',
               method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'purple',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat_btwn,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'chartreuse3',
-              method="lm",
-              se = F) +
+              se = F,
+              linewidth = 3) +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
   theme(legend.position = "none") +
   theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.title = element_text(vjust = -5)) +
+  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
   ylab("Hip Internal Rotation Deg.") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))

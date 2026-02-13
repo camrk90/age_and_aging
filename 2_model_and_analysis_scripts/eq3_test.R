@@ -2,6 +2,8 @@
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=ckelsey4@asu.edu
+#SBATCH --mem=10G 
+#SBATCH --array=1-21
 
 SAMP <- Sys.getenv("SLURM_ARRAY_TASK_ID")
 SAMP <- as.integer(SAMP)
@@ -67,8 +69,19 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
                                    K = kinship, W = agechron_covariates, 
                                    lib_size = cov, model="BMM")
   
+  #Run PQLseq for chronological age---------------------------------------------
+  age_m_phenotype<- predictor_matrix[, 3]
+  age_m_covariates<- as.matrix(predictor_matrix[, c(2,4:5)])
+  
+  #Run pqlseq model
+  age_m_pqlseq2_model<- pqlseq2(Y = meth, x = age_m_phenotype, 
+                                   K = kinship, W = age_m_covariates, 
+                                   lib_size = cov, model="BMM")
+  
+  
   #Save pqlseq models
   saveRDS(agechron_pqlseq2_model, paste("wb", "pqlseq2", "eq3", SAMP, sep = "_"))
+  saveRDS(age_m_pqlseq2_model, paste("wb", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
   
 } else {
   

@@ -22,6 +22,7 @@ long_data<- long_data %>%
 
 long_data<- long_data %>%
   filter(age_at_sampling > 1) %>%
+  filter(n > 1) %>%
   dplyr::rename(perc_unique = unique) %>%
   drop_na() %>%
   arrange(lid_pid)
@@ -74,26 +75,6 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
                                 K = kinship, W = w.age_covariates, 
                                 lib_size = cov, model="BMM")
   
-  #Run PQLseq for mean_age-------------------------------------------------------------
-  #Generate model matrix
-  m.age_phenotype<- predictor_matrix[, 3]
-  m.age_covariates<- predictor_matrix[, c(2,4:5)]
-  
-  #Run pqlseq model
-  m.age_pqlseq2_model<- pqlseq2(Y = meth, x = m.age_phenotype, 
-                                K = kinship, W = m.age_covariates, 
-                                lib_size = cov, model="BMM")
-  
-  #Run PQLseq for sex-------------------------------------------------------------
-  #Generate model matrix
-  sex_phenotype<- predictor_matrix[, 4]
-  sex_covariates<- predictor_matrix[, c(2:3,5)]
-  
-  #Run pqlseq model
-  sex_pqlseq2_model<- pqlseq2(Y = meth, x = sex_phenotype, 
-                              K = kinship, W = sex_covariates, 
-                              lib_size = cov, model="BMM")
-  
   #Run PQLseq for chronological age---------------------------------------------
   #Generate model matrix
   predictor_matrix<- model.matrix(~ age_at_sampling + individual_sex + perc_unique, data = long_data)
@@ -102,14 +83,12 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   
   #Run pqlseq model
   agechron_pqlseq2_model<- pqlseq2(Y = meth, x = agechron_phenotype, 
-                              K = kinship, W = agechron_covariates, 
-                              lib_size = cov, model="BMM")
+                                   K = kinship, W = agechron_covariates, 
+                                   lib_size = cov, model="BMM")
   
   #Save pqlseq models
-  saveRDS(w.age_pqlseq2_model, paste("wb", "pqlseq2", "within", "age", SAMP, sep = "_"))
-  saveRDS(m.age_pqlseq2_model, paste("wb", "pqlseq2", "mean", "age", SAMP, sep = "_"))
-  saveRDS(sex_pqlseq2_model, paste("wb", "pqlseq2", "sex", SAMP, sep = "_"))
-  saveRDS(agechron_pqlseq2_model, paste("wb", "pqlseq2", "agechron", SAMP, sep = "_"))
+  saveRDS(w.age_pqlseq2_model, paste("within", "age", "no", "singles", SAMP, sep = "_"))
+  saveRDS(agechron_pqlseq2_model, paste("agechron", "no", "singles", SAMP, sep = "_"))
   
 } else {
   

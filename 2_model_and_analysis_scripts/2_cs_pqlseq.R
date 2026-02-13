@@ -2,6 +2,8 @@
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=ckelsey4@asu.edu
+#SBATCH --mem=10G 
+#SBATCH --array=1-21
 
 SAMP <- Sys.getenv("SLURM_ARRAY_TASK_ID")
 SAMP <- as.integer(SAMP)
@@ -68,7 +70,13 @@ overlap_lids<- overlap_lids %>%
 lids_to_remove<- long_data[!long_data$lid_pid %in% overlap_lids$lid_pid,]
 blood_metadata<- blood_metadata[!blood_metadata$lid_pid %in% lids_to_remove$lid_pid,]
 
-rm(lids_to_remove);rm(long_data)
+blood_metadata<- blood_metadata %>%
+  filter(age_at_sampling > 1)
+
+overlap_lids<- overlap_lids %>%
+  filter(age_at_sampling > 1)
+
+rm(lids_to_remove);rm(long_data);rm(long_ids)
 
 #Import kinship matrix
 kin<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
