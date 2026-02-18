@@ -79,10 +79,16 @@ blood_metadata<- blood_metadata %>%
   filter(age_at_sampling > 1)
 
 long_data<- long_data %>%
-  arrange(lid_pid) %>%
+  group_by(monkey_id) %>%
+  mutate(n = n()) %>%
+  ungroup()
+
+long_data<- long_data %>%
   filter(age_at_sampling > 1) %>%
+  #filter(n > 1) %>%
   dplyr::rename(perc_unique = unique) %>%
-  drop_na()
+  drop_na() %>%
+  arrange(lid_pid)
 
 rm(lids_to_remove);rm(overlap_lids);rm(long_ids)
 
@@ -172,14 +178,15 @@ age_full<- age_full %>%
   relocate(region_range, .after = chromEnd)
 
 age_full$within_cross<- "Both Insignificant"
-age_full$within_cross[age_full$fdr_within_age < 0.05 & age_full$fdr_long_cross < 0.05]<- "Both Significant"
-age_full$within_cross[age_full$fdr_within_age < 0.05 & age_full$fdr_long_cross > 0.05]<- "Within Age Significant"
-age_full$within_cross[age_full$fdr_within_age > 0.05 & age_full$fdr_long_cross < 0.05]<- "Cross Age Significant"
+age_full$within_cross[age_full$fdr_eq2_w_age < 0.05 & age_full$fdr_cross < 0.05]<- "Both Significant"
+age_full$within_cross[age_full$fdr_eq2_w_age < 0.05 & age_full$fdr_cross > 0.05]<- "Within Age Significant"
+age_full$within_cross[age_full$fdr_eq2_w_age > 0.05 & age_full$fdr_cross < 0.05]<- "Cross Age Significant"
 
 age_full$within_chron<- "Both Insignificant"
-age_full$within_chron[age_full$fdr_within_age < 0.05 & age_full$fdr_chron_age < 0.05]<- "Both Significant"
-age_full$within_chron[age_full$fdr_within_age < 0.05 & age_full$fdr_chron_age > 0.05]<- "Within Age Significant"
-age_full$within_chron[age_full$fdr_within_age > 0.05 & age_full$fdr_chron_age < 0.05]<- "Chron Age Significant"
+age_full$within_chron[age_full$fdr_eq2_w_age < 0.05 & age_full$fdr_chron_age < 0.05]<- "Both Significant"
+age_full$within_chron[age_full$fdr_eq2_w_age < 0.05 & age_full$fdr_chron_age > 0.05]<- "Within Age Significant"
+age_full$within_chron[age_full$fdr_eq2_w_age > 0.05 & age_full$fdr_chron_age < 0.05]<- "Chron Age Significant"
+age_full$within_chron<- factor(age_full$within_chron, levels = age_full$within_chron)
 
 #Generate age df subset
 age_trunc<- age_full %>%
@@ -247,7 +254,7 @@ long_data %>%
 
 #Age distribution
 long_data %>%
-  ggplot(aes(x=age_at_sampling, fill=as.factor(individual_sex))) +
+  ggplot(aes(x=round(age_at_sampling), fill=as.factor(individual_sex))) +
   geom_bar(colour='black', position = 'dodge') +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
   coord_cartesian(xlim = c(0, 30)) +
@@ -372,7 +379,6 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, c1, c2, lab1, lab2, plot_typ
   df<- df %>%
     filter({{fdr1}} < .05 & {{fdr2}} < .05) %>%
     mutate(diff = abs({{var2}}) - abs({{var1}}))
-  print(nrow(df))
   
   #eval(substitute(df_lm<- lm(var1 ~ var2, data=df)))
   
@@ -393,11 +399,12 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, c1, c2, lab1, lab2, plot_typ
       geom_vline(xintercept=0, linetype="dashed") +
       geom_hline(yintercept=0, linetype="dashed") +
       scale_color_gradient2(low = c2, mid = "grey70", high = c1, midpoint = 0, name = "") +
-      theme_classic(base_size=32) +
-      theme(legend.key.width = unit(5, 'cm'), legend.position = "top") +
+      theme_classic(base_size=24) +
+      theme(legend.key.width = unit(2, 'cm'), legend.position = "top") +
       theme(panel.background = element_rect(colour = "black", linewidth=3)) +
-      #xlim(-0.20, 0.20) +
-      #ylim(-0.20, 0.20) +
+      theme(aspect.ratio = 1) +
+      xlim(-0.20, 0.20) +
+      ylim(-0.20, 0.20) +
       xlab(lab1) +
       ylab(lab2)
     
@@ -408,9 +415,10 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, c1, c2, lab1, lab2, plot_typ
       geom_histogram(bins = 50, colour="black") +
       geom_vline(xintercept=0, linetype="dashed") +
       scale_fill_gradient2(low = c2, mid = "grey70", high = c1, midpoint = 0, name = "") +
-      theme_classic(base_size=32) +
+      theme_classic(base_size=24) +
       theme(legend.position = "none") +
       theme(panel.background = element_rect(colour = "black", linewidth=3)) +
+      theme(aspect.ratio = 1) +
       xlab(paste(lab2, "-", lab1, sep=" "))
     
   }
@@ -504,14 +512,24 @@ chron.age<- age_trunc$outcome[age_trunc$fdr_chron_age< 0.05]
 age.w<- age_trunc$outcome[age_trunc$fdr_eq2_w_age < 0.05]
 eq3<- age_trunc$outcome[age_trunc$fdr_eq3_age < 0.05]
 
-venn_list<- list(cross.age, chron.age, age.w)
-names(venn_list)<- c("cross.age", "chron.age", "age.w")
+venn_list1<- list(cross.age, chron.age, age.w)
+names(venn_list1)<- c("cross.age", "chron.age", "age.w")
 
-ggvenn(venn_list,
+ggvenn(venn_list1,
        text_size = 8,
        show_percentage = F)
 
-upset(fromList(venn_list), order.by = "freq")
+venn_list2<- list(chron.age, age.w, eq3)
+names(venn_list2)<- c("chron.age", "age.w", "eq3")
+
+ggvenn(venn_list2,
+       text_size = 8,
+       show_percentage = F)
+
+venn_all<- list(cross.age, chron.age, age.w, eq3)
+names(venn_all)<- c("cross.age", "chron.age", "age.w", "eq3")
+
+upset(fromList(venn_list2), order.by = "freq", text.scale = c(2, 2, 2, 1, 2, 1.5), line.size = 1, point.size = 2)
 
 ######################################
 ###      JOIN INTERSECT FILES      ###   
@@ -829,6 +847,126 @@ chron_gsea %>%
   coord_flip()
 
 #### Fishers Exact ####
+enrichment<- function(model_df, model_type1, model_type2, var_type1, var_type2){
+  
+  df_list<- list()
+  
+  for(i in unique(model_df$anno)) {
+    
+    df2<- model_df[model_df$anno == i,]
+    df2<- df2 %>% distinct(unique_cpg, .keep_all = T)
+    
+    a<- nrow(df2[df2[[model_type1]] == var_type1 & df2[[model_type2]] == var_type2,])
+    c<- nrow(df2[!c(df2[[model_type1]] == var_type1 & df2[[model_type2]] == var_type2),])
+    
+    df3<- model_df[!model_df$unique_cpg %in% df2$unique_cpg,]
+    df3<- df3 %>% distinct(unique_cpg, .keep_all = T)
+    
+    b<- nrow(df3[df3[[model_type1]] == var_type1 & df3[[model_type2]] == var_type2,])
+    d<- nrow(df3[!c(df3[[model_type1]] == var_type1 & df3[[model_type2]] == var_type2),])
+    
+    #Generate contingency table
+    c_table<- data.frame("x" = c(a, b),
+                         "y" = c(c, d),
+                         row.names = c(paste(i, "Y", sep=""), paste(i, "N", sep="")))
+    
+    colnames(c_table) = c("Is EQ2/Hypo", "Is NOT EQ2/hypo")
+    
+    if (all.equal(sum(c_table), length(unique(model_df$unique_cpg))) == T){
+      print(paste("Contingency table sum for", i, "matches unique cpg_loc length"))
+      
+      df_list[[length(df_list)+1]] = c_table
+      
+      print(c_table)
+    } else {
+      print(paste("Contingency table sum for", i, "DOES NOT MATCH unique cpg_loc length"))
+    }
+  }
+  #name table list
+  names(df_list)<- unique(model_df$anno)
+  
+  #Fisher test for each table and tidy with broom
+  ft<- lapply(df_list, fisher.test)
+  ft<- lapply(ft, broom::tidy)
+  
+  ft<- do.call(rbind, ft)
+  ft<- ft %>%
+    mutate(annotation = rownames(ft))
+  
+  #FDR p-val adjustment
+  ft<- ft %>%
+    mutate(padj = p.adjust(p.value)) %>%
+    mutate_at(vars(annotation), as.factor)
+  
+  #Log estimates and CIs
+  ft<- ft %>%
+    mutate(log_or = log(estimate),
+           log_ci.lo = log(conf.low),
+           log_ci.hi = log(conf.high))
+  
+  annos_order<- str_sort(ft$annotation, numeric = TRUE)
+  
+  #ft$anno_source<- "Repeat Elements"
+  #ft$anno_source[ft$annotation %in% chmm_ordered]<- "Chromatin States"
+  
+  #ft<- ft %>%
+  #arrange(anno_source, annotation)
+  
+  #Rearrange factors to sort by type then log_or
+  #ft$annotation<- factor(ft$annotation, levels = rev(annos_order))
+  
+  #ft$type<- var_type
+  
+  return(ft)
+}
+
+pqlseq_anno$within_chron<- "Both Insignificant"
+pqlseq_anno$within_chron[pqlseq_anno$fdr_eq2_w_age < 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Both Significant"
+pqlseq_anno$within_chron[pqlseq_anno$fdr_eq2_w_age < 0.05 & pqlseq_anno$fdr_chron_age > 0.05]<- "Within Age Significant"
+pqlseq_anno$within_chron[pqlseq_anno$fdr_eq2_w_age > 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Chron Age Significant"
+
+#DMRs Significant for EQ2 only
+within_chron_hypo<- enrichment(pqlseq_anno, 
+                               "within_chron", "eq2_w_signif",
+                               "Within Age Significant", "Age-Hypomethylated")
+within_chron_hypo$type<- "Age Hypomethylated"
+
+within_chron_hypo$source<- "RE's"
+within_chron_hypo$source[within_chron_hypo$annotation %in% chmm_ordered]<- "CHMM"
+
+within_chron_hypo$annotation<- factor(within_chron_hypo$annotation, levels = rev(within_chron_hypo$annotation))
+
+within_chron_hyper<- enrichment(pqlseq_anno, 
+                                "within_chron", "eq2_w_signif",
+                                "Within Age Significant", "Age-Hypermethylated")
+within_chron_hyper$type<- "Age Hypermethylated"
+
+within_chron_hyper$source<- "RE's"
+within_chron_hyper$source[within_chron_hyper$annotation %in% chmm_ordered]<- "CHMM"
+
+within_chron_hyper$annotation<- factor(within_chron_hyper$annotation, levels = rev(within_chron_hyper$annotation))
+
+within_chron_enrich<- rbind(within_chron_hypo, within_chron_hyper)
+
+within_chron_enrich_chmm<- within_chron_enrich %>%
+  filter(source == "CHMM")
+
+within_chron_enrich_chmm %>%
+  ggplot(aes(x=annotation, y=estimate, colour = type)) +
+  geom_point(aes(alpha=padj<0.05, shape = type), size = 2) +
+  #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black") +
+  geom_line(aes(group = type)) +
+  geom_hline(yintercept = 1, linetype = "dashed") +
+  scale_colour_manual(values = c("green1", "green4"), name = "") +
+  geom_errorbar(ymin = within_chron_enrich_chmm$conf.low, ymax = within_chron_enrich_chmm$conf.high, width = 0.3) +
+  theme_classic(base_size = 24) +
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  #theme(legend.position = "none") +
+  #ylim(c(-6, 4)) +
+  ylab("Odds Ratio") +
+  xlab("Annotation")
+
+#Enrichment for individual models
 enrichment<- function(model_df, model_type, var_type){
   
   df_list<- list()
@@ -1088,22 +1226,22 @@ cross_enrich$model<- "cross"
 eq3_enrich$model<- "eq3"
 between_enrich$model<- "between"
 
-all_enrich<- rbind(within_enrich, eq3_enrich, chron_enrich, cross_enrich)
+all_enrich<- rbind(within_enrich, eq3_enrich, chron_enrich)
 
 chmm_enrich<- all_enrich %>%
   filter(anno_source == "Chromatin States")
 
-chmm_enrich$annotation<- factor(chmm_enrich$annotation, levels = rev(chmm_ordered))
+chmm_enrich$annotation<- factor(chmm_enrich$annotation, levels = chmm_ordered)
 
 chmm_enrich %>%
-  ggplot(aes(x=annotation, y=estimate, colour = model)) +
-  geom_point(aes(alpha=padj<0.05)) +
+  ggplot(aes(x=annotation, y=estimate, colour = model, alpha=padj<0.05)) +
+  geom_point() +
   #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black") +
   geom_line(aes(group = model)) +
   geom_hline(yintercept = 1, linetype = "dashed") +
-  scale_colour_manual(values = c("steelblue1", "darkgoldenrod1", "purple","green4"), name = "") +
+  scale_colour_manual(values = c("steelblue1", "purple","green4"), name = "") +
   geom_errorbar(ymin = chmm_enrich$conf.low, ymax = chmm_enrich$conf.high, width = 0.3) +
-  theme_classic(base_size = 24) +
+  theme_classic(base_size = 18) +
   theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
   #theme(legend.position = "top") +
   #ylim(c(-6, 4)) +

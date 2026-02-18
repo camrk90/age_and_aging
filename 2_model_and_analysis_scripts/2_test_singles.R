@@ -77,9 +77,9 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   
   #Run PQLseq for chronological age---------------------------------------------
   #Generate model matrix
-  predictor_matrix<- model.matrix(~ age_at_sampling + individual_sex + perc_unique, data = long_data)
+  predictor_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + perc_unique, data = long_data)
   agechron_phenotype<- predictor_matrix[, 2]
-  agechron_covariates<- as.matrix(predictor_matrix[, 3:4])
+  agechron_covariates<- as.matrix(predictor_matrix[, 3:5])
   
   #Run pqlseq model
   agechron_pqlseq2_model<- pqlseq2(Y = meth, x = agechron_phenotype, 
@@ -87,8 +87,8 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
                                    lib_size = cov, model="BMM")
   
   #Save pqlseq models
-  saveRDS(w.age_pqlseq2_model, paste("within", "age", "no", "singles", SAMP, sep = "_"))
-  saveRDS(agechron_pqlseq2_model, paste("agechron", "no", "singles", SAMP, sep = "_"))
+  saveRDS(w.age_pqlseq2_model, paste("eq2", "age", "no", "singles", SAMP, sep = "_"))
+  saveRDS(agechron_pqlseq2_model, paste("eq3", "age", "no", "singles", SAMP, sep = "_"))
   
 } else {
   
