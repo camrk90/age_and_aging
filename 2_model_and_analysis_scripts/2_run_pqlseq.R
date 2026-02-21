@@ -22,6 +22,7 @@ long_data<- long_data %>%
 
 long_data<- long_data %>%
   filter(age_at_sampling > 1) %>%
+  filter(n > 1) %>%
   dplyr::rename(perc_unique = unique) %>%
   drop_na() %>%
   arrange(lid_pid)

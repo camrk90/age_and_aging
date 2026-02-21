@@ -16,10 +16,16 @@ setwd("/scratch/ckelsey4/Cayo_meth/glmer_model_compare")
 long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
 
 long_data<- long_data %>%
-  arrange(lid_pid) %>%
+  group_by(monkey_id) %>%
+  mutate(n = n()) %>%
+  ungroup()
+
+long_data<- long_data %>%
   filter(age_at_sampling > 1) %>%
+  filter(n > 1) %>%
   dplyr::rename(perc_unique = unique) %>%
-  drop_na()
+  drop_na() %>%
+  arrange(lid_pid)
 
 #Import kinship matrix----------------------------------------------------------
 kinship<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
@@ -58,30 +64,30 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   ###################################
   #####        Run PQLseq       #####
   ###################################
-  #Run PQLseq for chronological age---------------------------------------------
+  #Run PQLseq for eq3-----------------------------------------------------------
   #Generate model matrix
   predictor_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + perc_unique, data = long_data)
-  agechron_phenotype<- predictor_matrix[, 2]
-  agechron_covariates<- as.matrix(predictor_matrix[, 3:4])
+  eq3_phenotype<- predictor_matrix[, 2]
+  eq3_covariates<- as.matrix(predictor_matrix[, 3:4])
   
   #Run pqlseq model
-  agechron_pqlseq2_model<- pqlseq2(Y = meth, x = agechron_phenotype, 
-                                   K = kinship, W = agechron_covariates, 
+  eq3_pqlseq2_model<- pqlseq2(Y = meth, x = eq3_phenotype, 
+                                   K = kinship, W = eq3_covariates, 
                                    lib_size = cov, model="BMM")
   
   #Run PQLseq for chronological age---------------------------------------------
-  age_m_phenotype<- predictor_matrix[, 3]
-  age_m_covariates<- as.matrix(predictor_matrix[, c(2,4:5)])
+  eq3_m_phenotype<- predictor_matrix[, 3]
+  eq3_m_covariates<- as.matrix(predictor_matrix[, c(2,4:5)])
   
   #Run pqlseq model
-  age_m_pqlseq2_model<- pqlseq2(Y = meth, x = age_m_phenotype, 
-                                   K = kinship, W = age_m_covariates, 
+  eq3_m_pqlseq2_model<- pqlseq2(Y = meth, x = eq3_m_phenotype, 
+                                   K = kinship, W = eq3_m_covariates, 
                                    lib_size = cov, model="BMM")
   
   
   #Save pqlseq models
-  saveRDS(agechron_pqlseq2_model, paste("wb", "pqlseq2", "eq3", SAMP, sep = "_"))
-  saveRDS(age_m_pqlseq2_model, paste("wb", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
+  saveRDS(eq3_pqlseq2_model, paste("wb", "pqlseq2", "eq3", SAMP, sep = "_"))
+  saveRDS(eq3_m_pqlseq2_model, paste("wb", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
   
 } else {
   
