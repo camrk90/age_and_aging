@@ -5,72 +5,46 @@ library(lme4)
 #library(lmerTest)
 
 #Define functions---------------------------------------------------------------
-plot_slopes<- function(fixed, re, metadata, predictor, response){
+generate_models<- function(dat, var){
   
-  ggplot() + 
-    geom_ribbon(data = fixed, 
-                inherit.aes = F,
-                aes(x = x,
-                    y = predicted,
-                    ymin = conf.low,
-                    ymax = conf.high),
-                fill = "grey90")  +
-    geom_line(data = re, 
-              aes(x = x, 
-                  y = predicted, 
-                  colour = group),
-              alpha = .2,
-              linewidth = .5) +
-    geom_smooth(data = fixed,
-                inherit.aes=F,
-                aes(x = x,
-                    y = predicted),
-                color = 'black',
-                alpha = .35,
-                method="lm",
-                se = F) +
-    geom_point(data = metadata, 
-               inherit.aes=F,
-               aes(x = {{predictor}},
-                   y = {{response}}), 
-               cex = 1,
-               shape = 1,
-               alpha = 0.4) +
-    theme_classic() + 
-    theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-    theme(legend.position = "none") +
-    theme(axis.text.x  = element_text(vjust=0.5, size=7, colour="black")) + 
-    theme(axis.text.y  = element_text(vjust=0.5, size=7, colour="black")) + 
-    theme(axis.title = element_text(size=7, vjust = -5))
+  var <- deparse(substitute(var))
   
-}
-generate_predictions<- function(chron_mod, eq2_mod, eq3_mod){
+  f1 <- as.formula(paste(var, "~ age + individual_sex + (1|individual_code)"))
+  f2 <- as.formula(paste(var, "~ within_age + between_age + individual_sex + (1|individual_code)"))
+  f3 <- as.formula(paste(var, "~ age + between_age + individual_sex + (1|individual_code)"))
   
-  coefs<- as.data.frame(rbind(summary(chron_mod)[["coefficients"]], summary(eq2_mod)[["coefficients"]],
-                                    summary(eq3_mod)[["coefficients"]]))
+  chron <- lmer(f1, data = dat)
+  eq2   <- lmer(f2, data = dat)
+  eq3   <- lmer(f3, data = dat)
+
+  coefs<- as.data.frame(rbind(summary(chron)[["coefficients"]], summary(eq2)[["coefficients"]],
+                                    summary(eq3)[["coefficients"]]))
   
   rownames(coefs)<- c("eq1_intercept", "eq1_age", "eq1_sexM",
                       "eq2_intercept", "eq2_age.w", "eq2_age.btwn", "eq2_sexM",
                       "eq3_intercept", "eq3_age.w", "eq3_age.btwn", "eq3_sexM")
   
-  conf_ints<- as.data.frame(rbind(confint(chron_mod), 
-                                  confint(eq2_mod),
-                                  confint(eq3_mod)))
+  conf_ints<- as.data.frame(rbind(confint(chron), 
+                                  confint(eq2),
+                                  confint(eq3)))
   
   conf_ints<- conf_ints[!grepl("sig", rownames(conf_ints)),]
   
   coefs<- cbind(coefs, conf_ints)
   
-  fe.chron<- predict_response(chron_mod, "age")
+  fe.chron<- predict_response(chron, "age")
   #re.chron<- predict_response(chron_mod, terms = c("age", "individual_code"), type = "random")
   
-  fe.eq2<- predict_response(eq2_mod, "within_age")
+  fe.eq2<- predict_response(eq2, "within_age")
+  
+  fe.btwn<- predict_response(eq2, "between_age")
   #re.eq2<- predict_response(eq2_mod, terms = c("within_age", "individual_code"), type = "random")
   
-  fe.eq3 <- predict_response(eq3_mod, "age")
+  fe.eq3 <- predict_response(eq3, "age")
   #re.eq3<- predict_response(eq3_mod, terms = c("age", "individual_code"), type = "random")
   
-  return(list(coefs = coefs, fe.chron=fe.chron, fe.eq2=fe.eq2, fe.eq3=fe.eq3))
+  return(list(chron_mod = chron, eq2_mod = eq2, eq3_mod = eq3, 
+              coefs = coefs, fe.chron=fe.chron, fe.eq2=fe.eq2, fe.eq3=fe.eq3, fe.btwn=fe.btwn))
   
 }
 
@@ -131,75 +105,12 @@ hip_flexion %>%
   theme(legend.position = "none") +
   theme(panel.background = element_rect(colour = "black", linewidth=3))
 
-hip_flexion %>%
-  filter(hip_extension_deg > 100) %>%
-  ggplot(aes(age, hip_extension_deg, colour = individual_code)) +
-  geom_point(alpha = 0.3) +
-  geom_path(alpha = 0.5) +
-  theme(legend.position = "none")
-
 #Hip Extension------------------------------------------------------------------
 #Outliers under 100 degrees are removed
 hip_ext<- hip_flexion %>%
-  filter(hip_extension_deg > 100) 
+  filter(hip_extension_deg > 100)
 
-hip_extension_chron<- lmer(hip_extension_deg ~ age + individual_sex + (1|individual_code), 
-                           data = hip_ext)
-
-hip_extension_within<- lmer(hip_extension_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                            data = hip_ext)
-
-hip_extension_eq3<- lmer(hip_extension_deg ~ age + between_age + individual_sex + (1|individual_code), 
-                         data = hip_ext)
-
-hip_extension<- generate_predictions(chron_mod = hip_extension_chron, 
-                                     eq2_mod = hip_extension_within, 
-                                     eq3_mod = hip_extension_eq3)
-
-df2<- hip_ext %>%
-  select(individual_code, individual_sex, between_age, hip_extension_deg) %>%
-  group_by(individual_code) %>%
-  mutate(mean_hip_ext = mean(hip_extension_deg)) %>%
-  ungroup() %>%
-  distinct(individual_code, .keep_all = T)
-df2$age.w_slope<- hip_extension$coefs[5,1]
-
-x_range <- diff(range(df2$between_age))
-half_dx <- 0.05 * x_range
-
-# compute segment endpoints for each individual's slope segment
-df2 <- df2 %>%
-  mutate(
-    dx = half_dx,
-    x0 = between_age - dx,
-    x1 = between_age + dx,
-    y0 = mean_hip_ext - age.w_slope * dx,
-    y1 = mean_hip_ext + age.w_slope * dx
-  )
-
-df2 %>%
-  ggplot(aes(x=between_age, y=mean_hip_ext)) + 
-  geom_segment(aes(x = x0, xend = x1, y = y0, yend = y1),
-               colour = 'green4', 
-               size = 0.8, lineend = "round", show.legend = TRUE) +
-  geom_line(data = hip_extension$fe.chron,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-            color = 'steelblue2',
-            linewidth = 1.5) +
-  geom_point(cex = 1,
-             alpha = 0.8) +
-  theme_classic(base_size = 18) + 
-  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-  theme(legend.position = "none") +
-  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.title = element_text(vjust = -5)) +
-  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
-  xlab("Age") +
-  ylab("Hip Extension (Deg.)") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
+hip_extension<- generate_models(hip_ext, hip_extension_deg)
 
 ggplot() + 
   geom_point(data = hip_ext, 
@@ -207,26 +118,26 @@ ggplot() +
              aes(x = age,
                  y = hip_extension_deg), 
              cex = 1,
-             shape = 1,
              alpha = 0.8) +
   geom_line(data = hip_extension$fe.chron,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
-              color = 'steelblue2') +
+              color = 'steelblue2',
+            linewidth = 1.5) +
   geom_line(data = hip_extension$fe.eq3,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
             color = 'purple',
             linewidth =1.5) +
-  geom_smooth(data = hip_extension$fe.eq3,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'green4',
-              linewidth = 1.5,
-              linetype = "dashed") +
+  geom_line(data = hip_extension$fe.btwn,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'green4',
+            linewidth =1.5,
+            linetype = "dashed") +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
   theme(legend.position = "none") +
@@ -236,58 +147,39 @@ ggplot() +
   theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
   ylab("Hip Extension (Deg.)") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
-  
+  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
+  scale_y_continuous(breaks = seq(100, 180, 20), limits = c(100, 180))
 
 
-#Hip Internal Rotation-------------------------------------------------------------------
-hip_int_rotation_within<- lmer(hip_internal_rotation_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                           data = hip_flexion)
-
-hip_int_rotation_eq3<- lmer(hip_internal_rotation_deg ~ age + between_age + individual_sex + (1|individual_code), 
-                        data = hip_flexion)
-
-hip_int_rotation_chron<- lmer(hip_internal_rotation_deg ~ age + individual_sex + (1|individual_code), 
-                          data = hip_flexion)
-
-summary(hip_int_rotation_chron)[["coefficients"]]
-confint(hip_int_rotation_chron)
-summary(hip_int_rotation_within)[["coefficients"]]
-confint(hip_int_rotation_within)
-summary(hip_int_rotation_eq3)[["coefficients"]]
-confint(hip_int_rotation_eq3)
-
-int_coefs<- as.data.frame(rbind(summary(hip_int_rotation_chron)[["coefficients"]], summary(hip_int_rotation_within)[["coefficients"]],
-                                summary(hip_int_rotation_eq3)[["coefficients"]]))
-
-int_coefs<- int_coefs[c("age", "within_age", "between_age", "age.1", "between_age.1"),]
-
-fm.dat.chron<- predict_response(hip_int_rotation_chron, "age")
-re.dat.chron<- predict_response(hip_int_rotation_chron, terms = c("age", "individual_code"), type = "random")
-
-fm.dat.within<- predict_response(hip_int_rotation_within, "within_age")
-re.dat.within<- predict_response(hip_int_rotation_within, terms = c("within_age", "individual_code"), type = "random")
-
-fm.dat <- predict_response(hip_int_rotation_eq3, "age")
-fm.dat_btwn <- predict_response(hip_int_rotation_eq3, "between_age")
-re.dat<- predict_response(hip_int_rotation_eq3, terms = c("age", "individual_code"), type = "random")
+#Hip Internal Rotation----------------------------------------------------------
+hip_rotation<- generate_models(hip_flexion, hip_internal_rotation_deg)
 
 ggplot() + 
-  geom_point(data = hip_ext, 
+  geom_point(data = hip_flexion, 
              inherit.aes=F,
              aes(x = age,
                  y = hip_internal_rotation_deg), 
              cex = 1,
-             shape = 1,
              alpha = 0.8) +
-  geom_smooth(data = fm.dat.chron,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'steelblue2',
-              method="lm",
-              se = F,
-              linewidth = 3) +
+  geom_line(data = hip_rotation$fe.chron,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'steelblue2',
+            linewidth = 1.5) +
+  geom_line(data = hip_rotation$fe.eq3,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'purple',
+            linewidth = 1.5) +
+  geom_line(data = hip_rotation$fe.btwn,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'green4',
+            linewidth =1.5,
+            linetype = "dashed") +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
   theme(legend.position = "none") +
@@ -296,71 +188,13 @@ ggplot() +
   theme(axis.title = element_text(vjust = -5)) +
   theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
-  ylab("Hip Internal Rotation Deg.") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
-
-chron_int_rot<- plot_slopes(fm.dat.chron, re.dat.chron, hip_flexion, age, hip_internal_rotation_deg)
-chron_int_rot +
-  xlab("Age") +
-  ylab("Hip Internal Rotation Deg.") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
-
-eq3_int_rot<- plot_slopes(fm.dat, re.dat, hip_flexion, age, hip_internal_rotation_deg)
-eq3_int_rot + 
-  xlab("Age") +
-  ylab("Hip Internal Rotation Deg.") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) 
-
-within_int_rot<- plot_slopes(fm.dat.within, re.dat.within, hip_flexion, within_age, hip_internal_rotation_deg)
-within_int_rot +
-  xlab("Within-Ind. Centered Age") +
-  ylab("Hip Internal Rotation Deg.")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  ylab("Hip Internal Rotation (Deg.)") +
+  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
+  scale_y_continuous(breaks = seq(0, 80, 20), limits = c(0, 80))
+  
 
 #Femoral Abduction--------------------------------------------------------------
-fem_abduction_within<- lmer(femoral_abduction_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                               data = hip_flexion)
-
-fem_abduction_eq3<- lmer(femoral_abduction_deg ~ age + between_age + individual_sex + (1|individual_code), 
-                            data = hip_flexion)
-
-fem_abduction_chron<- lmer(femoral_abduction_deg ~ age + individual_sex + (1|individual_code), 
-                              data = hip_flexion)
-
-summary(fem_abduction_chron)[["coefficients"]]
-confint(fem_abduction_chron)
-summary(fem_abduction_within)[["coefficients"]]
-confint(fem_abduction_within)
-summary(fem_abduction_eq3)[["coefficients"]]
-confint(fem_abduction_eq3)
-
-abduc_coefs<- as.data.frame(rbind(summary(fem_abduction_chron)[["coefficients"]], summary(fem_abduction_within)[["coefficients"]],
-                                  summary(fem_abduction_eq3)[["coefficients"]]))
-
-abduc_coefs<- abduc_coefs[c("age", "within_age", "between_age", "age.1", "between_age.1"),]
-
-fm.dat.chron<- predict_response(fem_abduction_chron, "age")
-re.dat.chron<- predict_response(fem_abduction_chron, terms = c("age", "individual_code"), type = "random")
-
-fm.dat.within<- predict_response(fem_abduction_within, "within_age")
-re.dat.within<- predict_response(fem_abduction_within, terms = c("within_age", "individual_code"), type = "random")
-
-fm.dat <- predict_response(fem_abduction_eq3, "age")
-fm.dat_btwn <- predict_response(fem_abduction_eq3, "between_age")
-re.dat<- predict_response(fem_abduction_eq3, terms = c("age", "individual_code"), type = "random")
+femoral_abduction<- generate_models(hip_flexion, femoral_abduction_deg)
 
 ggplot() + 
   geom_point(data = hip_flexion, 
@@ -370,28 +204,25 @@ ggplot() +
              cex = 1,
              shape = 1,
              alpha = 0.8) +
-  geom_smooth(data = fm.dat.chron,
+  geom_line(data = femoral_abduction$fe.chron,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
               color = 'steelblue2',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
+            linewidth = 1.5) +
+  geom_line(data = femoral_abduction$fe.eq3,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
               color = 'purple',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
+            linewidth = 1.5) +
+  geom_line(data = femoral_abduction$fe.btwn,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
-              color = 'green4',
-              method="lm",
-              se = F,
-              linetype = "dashed") +
+            color = 'green4',
+            linewidth = 1.5,
+            linetype = "dashed") +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
   theme(legend.position = "none") +
@@ -403,37 +234,8 @@ ggplot() +
   ylab("Femoral Abduction") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
 
-#Femoral Abduction--------------------------------------------------------------
-femoral_adduction_within<- lmer(femoral_adduction_deg ~ within_age + between_age + individual_sex + (1|individual_code), 
-                            data = hip_flexion)
-
-femoral_adduction_eq3<- lmer(femoral_adduction_deg ~ age + between_age + individual_sex + (1|individual_code), 
-                         data = hip_flexion)
-
-femoral_adduction_chron<- lmer(femoral_adduction_deg ~ age + individual_sex + (1|individual_code), 
-                           data = hip_flexion)
-
-summary(femoral_adduction_chron)[["coefficients"]]
-confint(femoral_adduction_chron)
-summary(femoral_adduction_within)[["coefficients"]]
-confint(femoral_adduction_within)
-summary(femoral_adduction_eq3)[["coefficients"]]
-confint(femoral_adduction_eq3)
-
-abduc_coefs<- as.data.frame(rbind(summary(femoral_adduction_chron)[["coefficients"]], summary(femoral_adduction_within)[["coefficients"]],
-                                  summary(femoral_adduction_eq3)[["coefficients"]]))
-
-abduc_coefs<- abduc_coefs[c("age", "within_age", "between_age", "age.1", "between_age.1"),]
-
-fm.dat.chron<- predict_response(femoral_adduction_chron, "age")
-re.dat.chron<- predict_response(femoral_adduction_chron, terms = c("age", "individual_code"), type = "random")
-
-fm.dat.within<- predict_response(femoral_adduction_within, "within_age")
-re.dat.within<- predict_response(femoral_adduction_within, terms = c("within_age", "individual_code"), type = "random")
-
-fm.dat <- predict_response(femoral_adduction_eq3, "age")
-fm.dat_btwn <- predict_response(femoral_adduction_eq3, "between_age")
-re.dat<- predict_response(femoral_adduction_eq3, terms = c("age", "individual_code"), type = "random")
+#Femoral Adduction--------------------------------------------------------------
+femoral_adduction<- generate_models(hip_flexion, femoral_adduction_deg)
 
 ggplot() + 
   geom_point(data = hip_flexion, 
@@ -443,115 +245,77 @@ ggplot() +
              cex = 1,
              shape = 1,
              alpha = 0.8) +
-  geom_smooth(data = fm.dat.chron,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'steelblue2',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'purple',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'green4',
-              method="lm",
-              se = F,
-              linetype = "dashed") +
+  geom_line(data = femoral_abduction$fe.chron,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'steelblue2',
+            linewidth = 1.5) +
+  geom_line(data = femoral_adduction$fe.eq3,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'purple',
+            linewidth = 1.5) +
+  geom_line(data = femoral_adduction$fe.btwn,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'green4',
+            linewidth = 1.5,
+            linetype = "dashed") +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-  theme(legend.position = "none") +
   theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.title = element_text(vjust = -5)) +
   theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
-  ylab("Femoral Adduction (Deg.)") +
+  ylab("Femoral Adduction") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
 
 #Body Weight--------------------------------------------------------------------
 bw<- hip_flexion %>%
   filter(body_weight_lb < 50)
 
-body_weight_within<- lmer(body_weight_lb ~ within_age + between_age + individual_sex + (1|individual_code), 
-                                data = bw)
-
-body_weight_eq3<- lmer(body_weight_lb ~ age + between_age + individual_sex + (1|individual_code), 
-                             data = bw)
-
-body_weight_chron<- lmer(body_weight_lb ~ age + individual_sex + (1|individual_code), 
-                               data = bw)
-
-summary(body_weight_chron)[["coefficients"]]
-confint(body_weight_chron)
-summary(body_weight_within)[["coefficients"]]
-confint(body_weight_within)
-summary(body_weight_eq3)[["coefficients"]]
-confint(body_weight_eq3)
-
-bw_coefs<- as.data.frame(rbind(summary(body_weight_chron)[["coefficients"]], summary(body_weight_within)[["coefficients"]],
-                                  summary(body_weight_eq3)[["coefficients"]]))
-
-bw_coefs<- abduc_coefs[c("age", "within_age", "between_age", "age.1", "between_age.1"),]
-
-fm.dat.chron<- predict_response(body_weight_chron, c("age", "individual_sex"))
-re.dat.chron<- predict_response(body_weight_chron, terms = c("age", "individual_code"), type = "random")
-
-fm.dat.within<- predict_response(body_weight_within, c("within_age", "individual_sex"))
-re.dat.within<- predict_response(body_weight_within, terms = c("within_age", "individual_code"), type = "random")
-
-fm.dat <- predict_response(body_weight_eq3, c("age", "individual_sex"))
-fm.dat2 <- predict_response(body_weight_eq3, c("age", "individual_sex"))
-fm.dat_btwn <- predict_response(body_weight_eq3, "between_age")
-re.dat<- predict_response(body_weight_eq3, terms = c("age", "individual_code"), type = "random")
+bw_mods<- generate_models(bw, body_weight_lb)
 
 ggplot() + 
-  geom_point(data = hip_flexion, 
+  geom_point(data = bw, 
              inherit.aes=F,
              aes(x = age,
-                 y = femoral_adduction_deg), 
+                 y = body_weight_lb), 
              cex = 1,
-             shape = 1,
              alpha = 0.8) +
-  geom_smooth(data = fm.dat.chron,
+  geom_line(data = bw_mods$fe.chron,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
               color = 'steelblue2',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
+              linewidth = 1.5) +
+  geom_line(data = bw_mods$fe.eq3,
               inherit.aes=F,
               aes(x = x,
                   y = predicted),
               color = 'purple',
-              method="lm",
-              se = F) +
-  geom_smooth(data = fm.dat,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'green4',
-              method="lm",
-              se = F,
-              linetype = "dashed") +
+              linewidth = 1.5) +
+  geom_line(data = bw_mods$fe.btwn,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'green4',
+            linewidth = 1.5,
+            linetype = "dashed") +
   theme_classic(base_size = 18) + 
   theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-  theme(legend.position = "none") +
   theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.title = element_text(vjust = -5)) +
   theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
   ylab("Body Weight (lbs)") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
+  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
+  scale_y_continuous(breaks = seq(10, 35, 5), limits = c(10, 35))
 
 #### Flexion and Internal Rotation ####
 #Hip Flexion-------------------------------------------------------------------
