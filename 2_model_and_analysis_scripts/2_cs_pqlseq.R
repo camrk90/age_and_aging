@@ -2,7 +2,7 @@
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=ckelsey4@asu.edu
-#SBATCH --mem=10G 
+#SBATCH --mem=50G 
 #SBATCH --array=1-21
 
 SAMP <- Sys.getenv("SLURM_ARRAY_TASK_ID")
@@ -14,44 +14,23 @@ library(tidyverse)
 library(PQLseq2)
 setwd("/scratch/ckelsey4/Cayo_meth/cross_models")
 
-#Define model function----
-run_cs_model<- function(meta){
+#Generate function--------------------------------------------------------------
+run_pqlseq<- function(pheno, covariates, type){
   
-  #Subset and rearrange kinship rows and cols to match metadata
-  kin<- kin[meta$lid_pid, meta$lid_pid]
+  mod<- pqlseq2(Y = meth, x = pheno, 
+                K = kinship, W = covariates, 
+                lib_size = cov, model="BMM")
+
   
-  #Check kinship matrix dims match metadata
-  all.equal(nrow(meta), ncol(kin))
-  all.equal(nrow(meta), nrow(kin))
+  mod<- mod %>%
+    filter(converged == TRUE) %>%
+    mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+    relocate(fdr, .after = pvalue) %>%
+    dplyr::select(-c(converged, elapsed_time))
   
-  #Filter metadata to lids in regions list
-  meta<- meta[meta$lid_pid %in% colnames(cov),]
+  colnames(mod)<- c("outcome", "n", paste(names(mod[,3:length(mod)]), type, sep = "_"))
   
-  cov<- subset(cov, select=meta$lid_pid)
-  meth<- subset(meth, select=meta$lid_pid)
-  
-  #Check metadata lids match the lids (cols) of a random chromosome
-  if (all.equal(meta$lid_pid, colnames(cov)) == T) {
-    
-    ###################################
-    #####        Run PQLseq       #####
-    ###################################
-    #Run PQLseq for within_age-------------------------------------------------------------
-    #Generate model matrix
-    predictor_matrix<- model.matrix(~ age_at_sampling + individual_sex + unique, data = meta)
-    age_pheno<- predictor_matrix[, 2]
-    age_cov<- predictor_matrix[, 3:4]
-    
-    #Run pqlseq model
-    age_model<- pqlseq2(Y = meth, x = age_pheno, 
-                        K = kin, W = age_cov, 
-                        lib_size = cov, model="BMM")
-    
-  } else {
-    
-    print("metadata lids did not match cov matrix lids")
-    
-  }
+  return(mod)
   
 }
 
@@ -78,25 +57,59 @@ overlap_lids<- overlap_lids %>%
 
 rm(lids_to_remove);rm(long_data);rm(long_ids)
 
-#Import kinship matrix
-kin<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
+#Import kinship matrix----------------------------------------------------------
+kinship<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
 
-#Import m/cov rds
+#Subset and rearrange kinship rows and cols to match metadata
+kinship<- kinship[blood_metadata$lid_pid, blood_metadata$lid_pid]
+
+#Import m/cov rds------------------------------------------------------------
+# load region lists that have been filtered for 5x coverage in 90% of samples
 regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered.rds")
-cov<- regions_cov[[SAMP]]
-
 regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered.rds")
-meth<- regions_m[[SAMP]]
 
-#Run model with ids that 100% overlap longitudinal set
-short<- run_cs_model(meta=overlap_lids)
+#Filter metadata to lids in regions list
+blood_metadata<- blood_metadata[blood_metadata$lid_pid %in% colnames(regions_cov[[1]]),]
 
-#Save short model
-saveRDS(short, paste("cs", SAMP, "short.rds", sep = "_"))
+regions_cov<- lapply(names(regions_cov), function(x){
+  regions_cov<- subset(regions_cov[[x]], select=blood_metadata$lid_pid)
+  return(regions_cov)
+})
 
-#Run model with all cross-sectional ids
-long<- run_cs_model(meta=blood_metadata)
+regions_m<- lapply(names(regions_m), function(x){
+  regions_m<- subset(regions_m[[x]], select=blood_metadata$lid_pid)
+  return(regions_m)
+})
 
-#Save long model
-saveRDS(long, paste("cs", SAMP, "long.rds", sep = "_"))
+names(regions_cov)<- 1:21 #turn all chroms into integers (X = 21)
+names(regions_m)<- 1:21 #turn all chroms into integers (X = 21)
+
+#Check metadata lids match the lids (cols) of a random chromosome
+if (all.equal(blood_metadata$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
+  
+  #Model Vectors for lme4-------------------------------------------------------
+  cov<- regions_cov[[SAMP]]
+  meth<- regions_m[[SAMP]]
+  
+  ###################################
+  #####        Run PQLseq       #####
+  ###################################
+  #Run PQLseq-------------------------------------------------------------------
+  #Generate model matrix
+  predictor_matrix<- model.matrix(~ age_at_sampling + individual_sex + unique, data = blood_metadata)
+  age_pheno<- predictor_matrix[, 2]
+  age_cov<- predictor_matrix[, 3:4]
+  
+  #Run pqlseq model
+  cs_model<- run_pqlseq(age_pheno, age_cov, "cross")
+  
+  #Save pqlseq model
+  saveRDS(cs_model, paste("cs", "pqlseq2", "age", SAMP, sep = "_"))
+  
+} else {
+  
+  print("blood_metadata lids did not match cov matrix lids")
+  
+}
+
 

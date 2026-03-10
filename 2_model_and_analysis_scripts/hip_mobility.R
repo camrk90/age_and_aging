@@ -2,7 +2,7 @@ library(tidyverse)
 library(ggplot2)
 library(ggeffects)
 library(lme4)
-#library(lmerTest)
+library(lmerTest)
 
 #Define functions---------------------------------------------------------------
 generate_models<- function(dat, var){
@@ -19,6 +19,8 @@ generate_models<- function(dat, var){
 
   coefs<- as.data.frame(rbind(summary(chron)[["coefficients"]], summary(eq2)[["coefficients"]],
                                     summary(eq3)[["coefficients"]]))
+  
+  coefs$`Pr(>|t|)` <- round(coefs$`Pr(>|t|)`, 3)
   
   rownames(coefs)<- c("eq1_intercept", "eq1_age", "eq1_sexM",
                       "eq2_intercept", "eq2_age.w", "eq2_age.btwn", "eq2_sexM",
@@ -46,6 +48,46 @@ generate_models<- function(dat, var){
   return(list(chron_mod = chron, eq2_mod = eq2, eq3_mod = eq3, 
               coefs = coefs, fe.chron=fe.chron, fe.eq2=fe.eq2, fe.eq3=fe.eq3, fe.btwn=fe.btwn))
   
+}
+
+generate_model_plots <- function(dat, x_var, y_var, fe_chron, fe_eq3, fe_btwn) {
+  
+  ggplot() + 
+    geom_point(data = dat,
+               inherit.aes = FALSE,
+               aes(x = {{ x_var }},
+                   y = {{ y_var }}),
+               size = 0.1) +
+    
+    geom_line(data = fe_chron,
+              inherit.aes = FALSE,
+              aes(x = x,
+                  y = predicted),
+              color = "steelblue2",
+              linewidth = 1) +
+    
+    geom_line(data = fe_eq3,
+              inherit.aes = FALSE,
+              aes(x = x,
+                  y = predicted),
+              color = "purple",
+              linewidth = 1) +
+    
+    geom_line(data = fe_btwn,
+              inherit.aes = FALSE,
+              aes(x = x,
+                  y = predicted),
+              color = "orchid1",
+              linewidth = 1,
+              linetype = "dashed") +
+    
+    theme_classic() + 
+    theme(panel.background = element_rect(colour = "black", linewidth = 0.5),
+          axis.line = element_line(colour = "black", linewidth = 0.5),
+          legend.position = "none",
+          axis.title = element_blank(),
+          axis.text = element_blank(),
+          plot.margin = margin(0, 0, 0, 0, "pt"))
 }
 
 #Import data--------------------------------------------------------------------
@@ -110,129 +152,56 @@ hip_flexion %>%
 hip_ext<- hip_flexion %>%
   filter(hip_extension_deg > 100)
 
+#Generate models and coefs
 hip_extension<- generate_models(hip_ext, hip_extension_deg)
 
-ggplot() + 
-  geom_point(data = hip_ext, 
-             inherit.aes=F,
-             aes(x = age,
-                 y = hip_extension_deg), 
-             cex = 1,
-             alpha = 0.8) +
-  geom_line(data = hip_extension$fe.chron,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'steelblue2',
-            linewidth = 1.5) +
-  geom_line(data = hip_extension$fe.eq3,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-            color = 'purple',
-            linewidth =1.5) +
-  geom_line(data = hip_extension$fe.btwn,
-            inherit.aes=F,
-            aes(x = x,
-                y = predicted),
-            color = 'green4',
-            linewidth =1.5,
-            linetype = "dashed") +
-  theme_classic(base_size = 18) + 
-  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-  theme(legend.position = "none") +
+#Generate base plot
+hip_ext_plot<- generate_model_plots(dat = hip_ext,
+                                    x_var = age,
+                                    y_var = hip_extension_deg,
+                                    fe_chron = hip_extension$fe.chron,
+                                    fe_eq3 = hip_extension$fe.eq3,
+                                    fe_btwn = hip_extension$fe.btwn)
+
+#Save base plot output
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_ext.svg", hip_ext_plot, height = 2, width = 3, units = "in")
+
+#Add text and axis scales to identify plot values for Illustrator
+hip_ext_plot +
   theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
   theme(axis.title = element_text(vjust = -5)) +
-  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
   xlab("Age") +
   ylab("Hip Extension (Deg.)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
   scale_y_continuous(breaks = seq(100, 180, 20), limits = c(100, 180))
 
-
 #Hip Internal Rotation----------------------------------------------------------
+#Generate models and coefs list
 hip_rotation<- generate_models(hip_flexion, hip_internal_rotation_deg)
 
-ggplot() + 
-  geom_point(data = hip_flexion, 
-             inherit.aes=F,
-             aes(x = age,
-                 y = hip_internal_rotation_deg), 
-             cex = 1,
-             alpha = 0.8) +
-  geom_line(data = hip_rotation$fe.chron,
-            inherit.aes=F,
-            aes(x = x,
-                y = predicted),
-            color = 'steelblue2',
-            linewidth = 1.5) +
-  geom_line(data = hip_rotation$fe.eq3,
-            inherit.aes=F,
-            aes(x = x,
-                y = predicted),
-            color = 'purple',
-            linewidth = 1.5) +
-  geom_line(data = hip_rotation$fe.btwn,
-            inherit.aes=F,
-            aes(x = x,
-                y = predicted),
-            color = 'green4',
-            linewidth =1.5,
-            linetype = "dashed") +
-  theme_classic(base_size = 18) + 
-  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-  theme(legend.position = "none") +
-  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.title = element_text(vjust = -5)) +
-  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
+#Generate base plot
+hip_int_rot_plot<- generate_model_plots(dat = hip_flexion,
+                                        x_var = age,
+                                        y_var = hip_internal_rotation_deg,
+                                        fe_chron = hip_rotation$fe.chron,
+                                        fe_eq3 = hip_rotation$fe.eq3,
+                                        fe_btwn = hip_rotation$fe.btwn)
+
+#Save base plot 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_int_rot.svg", hip_int_rot_plot, height = 2, width = 3, units = "in")
+
+#Add text and axis scales to identify plot values for Illustrator
+hip_int_rot_plot +
+  theme(legend.position = "none",
+        axis.text.x  = element_text(vjust=0.5, colour="black"),
+        axis.text.y  = element_text(vjust=0.5, colour="black"),
+        axis.title = element_text(vjust = -5)) +
   xlab("Age") +
   ylab("Hip Internal Rotation (Deg.)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
   scale_y_continuous(breaks = seq(0, 80, 20), limits = c(0, 80))
   
-
-#Femoral Abduction--------------------------------------------------------------
-femoral_abduction<- generate_models(hip_flexion, femoral_abduction_deg)
-
-ggplot() + 
-  geom_point(data = hip_flexion, 
-             inherit.aes=F,
-             aes(x = age,
-                 y = femoral_abduction_deg), 
-             cex = 1,
-             shape = 1,
-             alpha = 0.8) +
-  geom_line(data = femoral_abduction$fe.chron,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'steelblue2',
-            linewidth = 1.5) +
-  geom_line(data = femoral_abduction$fe.eq3,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-              color = 'purple',
-            linewidth = 1.5) +
-  geom_line(data = femoral_abduction$fe.btwn,
-              inherit.aes=F,
-              aes(x = x,
-                  y = predicted),
-            color = 'green4',
-            linewidth = 1.5,
-            linetype = "dashed") +
-  theme_classic(base_size = 18) + 
-  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
-  theme(legend.position = "none") +
-  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.title = element_text(vjust = -5)) +
-  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
-  xlab("Age") +
-  ylab("Femoral Abduction") +
-  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
 
 #Femoral Adduction--------------------------------------------------------------
 femoral_adduction<- generate_models(hip_flexion, femoral_adduction_deg)
@@ -280,6 +249,17 @@ bw<- hip_flexion %>%
 
 bw_mods<- generate_models(bw, body_weight_lb)
 
+#Generate base plot
+bw_plot<- generate_model_plots(dat = bw,
+                               x_var = age,
+                               y_var = body_weight_lb,
+                               fe_chron = bw_mods$fe.chron,
+                               fe_eq3 = bw_mods$fe.eq3,
+                               fe_btwn = bw_mods$fe.btwn)
+
+#Save base plot 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/bw.svg", bw_plot, height = 2, width = 3, units = "in")
+
 ggplot() + 
   geom_point(data = bw, 
              inherit.aes=F,
@@ -317,7 +297,50 @@ ggplot() +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
   scale_y_continuous(breaks = seq(10, 35, 5), limits = c(10, 35))
 
-#### Flexion and Internal Rotation ####
+
+
+#### Extra Models ####
+#Femoral Abduction--------------------------------------------------------------
+femoral_abduction<- generate_models(hip_flexion, femoral_abduction_deg)
+
+ggplot() + 
+  geom_point(data = hip_flexion, 
+             inherit.aes=F,
+             aes(x = age,
+                 y = femoral_abduction_deg), 
+             cex = 1,
+             shape = 1,
+             alpha = 0.8) +
+  geom_line(data = femoral_abduction$fe.chron,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'steelblue2',
+            linewidth = 1.5) +
+  geom_line(data = femoral_abduction$fe.eq3,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'purple',
+            linewidth = 1.5) +
+  geom_line(data = femoral_abduction$fe.btwn,
+            inherit.aes=F,
+            aes(x = x,
+                y = predicted),
+            color = 'green4',
+            linewidth = 1.5,
+            linetype = "dashed") +
+  theme_classic(base_size = 18) + 
+  theme(panel.background = element_rect(colour = "black", linewidth=1)) +
+  theme(legend.position = "none") +
+  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
+  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
+  theme(axis.title = element_text(vjust = -5)) +
+  theme(panel.background = element_rect(colour = "black", linewidth=3)) +
+  xlab("Age") +
+  ylab("Femoral Abduction") +
+  scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
+
 #Hip Flexion-------------------------------------------------------------------
 hip_flexion_chron<- lmer(hip_flexion_deg ~ age + individual_sex + (1|individual_code), 
                          data = hip_flexion)

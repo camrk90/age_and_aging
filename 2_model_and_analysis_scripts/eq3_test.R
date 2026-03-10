@@ -62,7 +62,7 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   meth<- regions_m[[SAMP]]
   
   ###################################
-  #####        Run PQLseq       #####
+  #####           Eq.3          #####
   ###################################
   #Run PQLseq for eq3-----------------------------------------------------------
   #Generate model matrix

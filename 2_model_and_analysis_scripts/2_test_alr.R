@@ -2,7 +2,7 @@
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=ckelsey4@asu.edu
-#SBATCH --mem=10G 
+#SBATCH --mem=50G 
 #SBATCH --array=1-21
 
 SAMP <- Sys.getenv("SLURM_ARRAY_TASK_ID")
@@ -17,8 +17,10 @@ long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
 
 long_data<- long_data %>%
   group_by(monkey_id) %>%
-  mutate(n = n()) %>%
-  ungroup()
+  mutate(n = n(),
+         alr = max(age_at_sampling)) %>%
+  ungroup() %>% 
+  relocate(alr, .after = age_at_sampling)
 
 long_data<- long_data %>%
   filter(age_at_sampling > 1) %>%
@@ -57,7 +59,7 @@ names(regions_m)<- 1:21 #turn all chroms into integers (X = 21)
 #Check metadata lids match the lids (cols) of a random chromosome
 if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   
-  #Model Vectors for lme4---------------------------------------------------------
+  #Model Vectors for lme4-------------------------------------------------------
   cov<- regions_cov[[SAMP]]
   meth<- regions_m[[SAMP]]
   
@@ -66,29 +68,35 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   ###################################
   #Run PQLseq for within_age-------------------------------------------------------------
   #Generate model matrix
-  predictor_matrix<- model.matrix(~ within.age + mean.age + individual_sex + perc_unique, data = long_data)
-  w.age_phenotype<- predictor_matrix[, 2]
-  w.age_covariates<- predictor_matrix[, 3:5]
+  predictor_matrix<- model.matrix(~ age_at_sampling*alr + individual_sex + perc_unique, data = long_data)
+  phenotype<- predictor_matrix[, 2]
+  covariates<- predictor_matrix[, 3:6]
   
   #Run pqlseq model
-  w.age_pqlseq2_model<- pqlseq2(Y = meth, x = w.age_phenotype, 
-                                K = kinship, W = w.age_covariates, 
-                                lib_size = cov, model="BMM")
+  age_pqlseq2_model<- pqlseq2(Y = meth, x = phenotype, 
+                              K = kinship, W = covariates, 
+                              lib_size = cov, model="BMM",
+                              verbose=T)
   
-  #Run PQLseq for chronological age---------------------------------------------
-  #Generate model matrix
-  predictor_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + perc_unique, data = long_data)
-  agechron_phenotype<- predictor_matrix[, 2]
-  agechron_covariates<- as.matrix(predictor_matrix[, 3:5])
+  age_pqlseq2_model_df<- age_pqlseq2_model@estimates
   
-  #Run pqlseq model
-  agechron_pqlseq2_model<- pqlseq2(Y = meth, x = agechron_phenotype, 
-                                   K = kinship, W = agechron_covariates, 
-                                   lib_size = cov, model="BMM")
+  aics <- sapply(rownames(cov), function(i) {
+    age_pqlseq2_model@others[[i]][["AIC"]]
+  })
+  
+  age_pqlseq2_model_df<- cbind(age_pqlseq2_model_df, aics)
+  
+  age_pqlseq2_model_df<- age_pqlseq2_model_df %>%
+    filter(converged == TRUE) %>%
+    mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+    relocate(fdr, .after = pvalue) %>%
+    select(-c(converged, elapsed_time, ))
+  
+  colnames(age_pqlseq2_model_df)<- c("outcome", "n", 
+                                     paste(names(age_pqlseq2_model_df[,3:11]), "alr", sep = "_"))
   
   #Save pqlseq models
-  saveRDS(w.age_pqlseq2_model, paste("eq2", "age", "no", "singles", SAMP, sep = "_"))
-  saveRDS(agechron_pqlseq2_model, paste("eq3", "age", "no", "singles", SAMP, sep = "_"))
+  saveRDS(age_pqlseq2_model_df, paste("alr", 'pqlseq', "model", SAMP, sep = "_"))
   
 } else {
   
@@ -96,5 +104,5 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   
 }
 
-
-
+  
+  
