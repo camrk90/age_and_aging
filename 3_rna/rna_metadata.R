@@ -1,4 +1,5 @@
 library(tidyverse)
+library(ggplot2)
 
 base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
 

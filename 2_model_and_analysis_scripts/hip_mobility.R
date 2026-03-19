@@ -72,22 +72,13 @@ generate_model_plots <- function(dat, x_var, y_var, fe_chron, fe_eq3, fe_btwn) {
                   y = predicted),
               color = "purple",
               linewidth = 1) +
-    
-    geom_line(data = fe_btwn,
-              inherit.aes = FALSE,
-              aes(x = x,
-                  y = predicted),
-              color = "orchid1",
-              linewidth = 1,
-              linetype = "dashed") +
-    
-    theme_classic() + 
-    theme(panel.background = element_rect(colour = "black", linewidth = 0.5),
+    theme_classic(base_size=6) +
+    theme(panel.background = element_rect(colour = "black", linewidth=1),
           axis.line = element_line(colour = "black", linewidth = 0.5),
-          legend.position = "none",
-          axis.title = element_blank(),
-          axis.text = element_blank(),
-          plot.margin = margin(0, 0, 0, 0, "pt"))
+          plot.margin = margin(1, 1, 1, 1, "pt"),
+          aspect.ratio = 1,
+          panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+          panel.grid.minor = element_line(color = "grey98", linewidth = 0.5))
 }
 
 #Import data--------------------------------------------------------------------
@@ -107,20 +98,26 @@ hip_flexion<- hip_flexion %>%
   mutate(min_age = min(age))
 hip_flexion$age<- round(hip_flexion$age, 0)
 
-hip_flexion %>%
+samples_dist_hip<- hip_flexion %>%
   ggplot(aes(x=age, y=reorder(individual_code, min_age), colour=as.factor(individual_sex))) +
-  geom_path(linewidth = 1.5, alpha = 0.8) +
-  geom_point(colour="black", size = 0.5) +
+  geom_path(linewidth = 0.5) +
+  geom_point(colour="black", size = 0.25) +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
   scale_colour_manual(values = c("red3", "pink2"), name = "Sex") +
   ylab("Individual") +
   xlab("Age") +
-  theme_classic(base_size = 24) +
-  theme(axis.text.y=element_blank(),
-        axis.ticks.y=element_blank()) +
-  theme(legend.position = "none") +
-  theme(panel.background = element_rect(colour = "black", linewidth=3))
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/morph_samples.svg", height = 100, width = 87, units = "mm")
+  theme_classic(base_size=6) +
+  theme(legend.position = "bottom",
+        legend.key.height = unit(1, "mm"),
+        legend.title = element_blank(),
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        axis.text.y = element_blank())
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/samples_dist_hip.svg", 
+         samples_dist_hip, 
+         height = 80, width = 45, units = "mm")
 
 hip_flexion %>%
   ggplot(aes(x=age, fill=as.factor(individual_sex))) +
@@ -163,44 +160,39 @@ hip_ext_plot<- generate_model_plots(dat = hip_ext,
                                     fe_eq3 = hip_extension$fe.eq3,
                                     fe_btwn = hip_extension$fe.btwn)
 
-#Save base plot output
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_ext.svg", hip_ext_plot, height = 2, width = 3, units = "in")
-
 #Add text and axis scales to identify plot values for Illustrator
-hip_ext_plot +
-  theme(axis.text.x  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.text.y  = element_text(vjust=0.5, colour="black")) + 
-  theme(axis.title = element_text(vjust = -5)) +
+hip_ext_plot<- hip_ext_plot +
   xlab("Age") +
   ylab("Hip Extension (Deg.)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
   scale_y_continuous(breaks = seq(100, 180, 20), limits = c(100, 180))
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_ext_plot.svg", 
+       hip_ext_plot, 
+       height = 40, width = 40, units = "mm")
 
 #Hip Internal Rotation----------------------------------------------------------
 #Generate models and coefs list
 hip_rotation<- generate_models(hip_flexion, hip_internal_rotation_deg)
 
 #Generate base plot
-hip_int_rot_plot<- generate_model_plots(dat = hip_flexion,
+hip_int_plot<- generate_model_plots(dat = hip_flexion,
                                         x_var = age,
                                         y_var = hip_internal_rotation_deg,
                                         fe_chron = hip_rotation$fe.chron,
                                         fe_eq3 = hip_rotation$fe.eq3,
                                         fe_btwn = hip_rotation$fe.btwn)
 
-#Save base plot 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_int_rot.svg", hip_int_rot_plot, height = 2, width = 3, units = "in")
-
 #Add text and axis scales to identify plot values for Illustrator
-hip_int_rot_plot +
-  theme(legend.position = "none",
-        axis.text.x  = element_text(vjust=0.5, colour="black"),
-        axis.text.y  = element_text(vjust=0.5, colour="black"),
-        axis.title = element_text(vjust = -5)) +
+hip_int_plot<- hip_int_rot_plot +
   xlab("Age") +
   ylab("Hip Internal Rotation (Deg.)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
   scale_y_continuous(breaks = seq(0, 80, 20), limits = c(0, 80))
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_int_plot.svg", 
+       hip_int_plot, 
+       height = 40, width = 40, units = "mm")
   
 
 #Femoral Adduction--------------------------------------------------------------
@@ -256,7 +248,7 @@ bw_plot<- generate_model_plots(dat = bw,
                                fe_chron = bw_mods$fe.chron,
                                fe_eq3 = bw_mods$fe.eq3,
                                fe_btwn = bw_mods$fe.btwn)
-
+bw_plot
 #Save base plot 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/bw.svg", bw_plot, height = 2, width = 3, units = "in")
 

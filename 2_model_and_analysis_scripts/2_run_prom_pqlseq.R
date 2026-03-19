@@ -16,8 +16,8 @@ setwd("/scratch/ckelsey4/Cayo_meth/glmer_model_compare")
 run_pqlseq<- function(pheno, covariates, type){
   
   mod_df<- pqlseq2(Y = meth, x = pheno, 
-                K = kinship, W = covariates, 
-                lib_size = cov, model="BMM")
+                   K = kinship, W = covariates, 
+                   lib_size = cov, model="BMM")
   
   mod_df<- mod_df %>%
     filter(converged == TRUE) %>%
@@ -52,33 +52,34 @@ kinship<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
 #Subset and rearrange kinship rows and cols to match metadata
 kinship<- kinship[long_data$lid_pid, long_data$lid_pid]
 
-#Import m/cov rds------------------------------------------------------------
-# load region lists that have been filtered for 5x coverage in 90% of samples
-regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered.rds")
-regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered.rds")
+#Load promoters-----------------------------------------------------------------
+prom_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/prom_cov_filtered")
+prom_cov<- prom_cov[c(1:21)]
+prom_m<- readRDS("/scratch/ckelsey4/Cayo_meth/prom_m_filtered")
+prom_m<- prom_m[c(1:21)]
 
 #Filter metadata to lids in regions list
-long_data<- long_data[long_data$lid_pid %in% colnames(regions_cov[[1]]),]
+long_data<- long_data[long_data$lid_pid %in% colnames(prom_cov[[1]]),]
 
-regions_cov<- lapply(names(regions_cov), function(x){
-  regions_cov<- subset(regions_cov[[x]], select=long_data$lid_pid)
-  return(regions_cov)
+prom_cov<- lapply(names(prom_cov), function(x){
+  prom_cov<- subset(prom_cov[[x]], select=long_data$lid_pid)
+  return(prom_cov)
 })
 
-regions_m<- lapply(names(regions_m), function(x){
-  regions_m<- subset(regions_m[[x]], select=long_data$lid_pid)
-  return(regions_m)
+prom_m<- lapply(names(prom_m), function(x){
+  prom_m<- subset(prom_m[[x]], select=long_data$lid_pid)
+  return(prom_m)
 })
 
-names(regions_cov)<- 1:21 #turn all chroms into integers (X = 21)
-names(regions_m)<- 1:21 #turn all chroms into integers (X = 21)
+names(prom_cov)<- 1:21 #turn all chroms into integers (X = 21)
+names(prom_m)<- 1:21 #turn all chroms into integers (X = 21)
 
 #Check metadata lids match the lids (cols) of a random chromosome
-if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
+if (all.equal(long_data$lid_pid, colnames(prom_cov[[runif(1, 1, 21)]]))) {
   
   #Model Vectors for lme4-------------------------------------------------------
-  cov<- regions_cov[[SAMP]]
-  meth<- regions_m[[SAMP]]
+  cov<- prom_cov[[SAMP]]
+  meth<- prom_m[[SAMP]]
   
   ###################################
   #####           Eq.1          #####
@@ -93,7 +94,7 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   agechron_pqlseq2_model<- run_pqlseq(eq1_phenotype, eq1_covariates, "chron_age")
   
   #Save pqlseq model
-  saveRDS(agechron_pqlseq2_model, paste("wb", "pqlseq2", "agechron", SAMP, sep = "_"))
+  saveRDS(agechron_pqlseq2_model, paste("prom", "pqlseq2", "agechron", SAMP, sep = "_"))
   
   ###################################
   #####           Eq.2          #####
@@ -108,7 +109,7 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   w.age_pqlseq2_model<- run_pqlseq(eq2_phenotype, eq2_covariates, "eq2_w_age")
   
   #Save pqlseq model
-  saveRDS(w.age_pqlseq2_model, paste("wb", "pqlseq2", "within", "age", SAMP, sep = "_"))
+  saveRDS(w.age_pqlseq2_model, paste("prom", "pqlseq2", "within", "age", SAMP, sep = "_"))
   
   #Run PQLseq for mean_age------------------------------------------------------
   #Generate model matrix
@@ -119,7 +120,7 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   m.age_pqlseq2_model<- run_pqlseq(eq2_m_phenotype, eq2_m_covariates, "eq2_m_age")
   
   #Save pqlseq model
-  saveRDS(m.age_pqlseq2_model, paste("wb", "pqlseq2", "mean", "age", SAMP, sep = "_"))
+  saveRDS(m.age_pqlseq2_model, paste("prom", "pqlseq2", "mean", "age", SAMP, sep = "_"))
   
   ###################################
   #####           Eq.3          #####
@@ -134,7 +135,7 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   eq3_pqlseq2_model<-  run_pqlseq(eq3_phenotype, eq3_covariates, "eq3_age")
   
   #Save pqlseq model
-  saveRDS(eq3_pqlseq2_model, paste("wb", "pqlseq2", "eq3", SAMP, sep = "_"))
+  saveRDS(eq3_pqlseq2_model, paste("prom", "pqlseq2", "eq3", SAMP, sep = "_"))
   
   #Run PQLseq for chronological age---------------------------------------------
   eq3_m_phenotype<- eq3_matrix[, 3]
@@ -144,13 +145,14 @@ if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
   eq3_m_pqlseq2_model<- run_pqlseq(eq3_m_phenotype, eq3_m_covariates, "eq3_age_m")
   
   #Save pqlseq model
-  saveRDS(eq3_m_pqlseq2_model, paste("wb", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
+  saveRDS(eq3_m_pqlseq2_model, paste("prom", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
   
 } else {
   
   print("long_data lids did not match cov matrix lids")
   
 }
+
 
 
 

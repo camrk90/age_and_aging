@@ -13,12 +13,10 @@ library(lme4)
 library(limma)
 library(edgeR)
 
-#Load data
+#Load data----------------------------------------------------------------------
 base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
 rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_9Jan26.rds")
-rna_kin<- readRDS("/scratch/ckelsey4/Cayo_meth/rna_kin_matrix.rds")
 
-#Normalize RNA Count Data-------------------------------------------------------
 base_meta<- base_meta %>%
   arrange(Sample_ID) %>%
   mutate(y = 1)
@@ -90,7 +88,7 @@ run_glm<- function(rna, eq) {
     
   }
   
-  # bind once at the end (fast)
+  # bind once at the end
   df<- do.call(rbind, results_list)
   
   df$gene<- colnames(rna)
