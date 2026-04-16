@@ -17,7 +17,7 @@ library(EMMREML)
 #Load data
 base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
 rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_9Jan26.rds")
-rna_kin<- readRDS("/scratch/ckelsey4/Cayo_meth/rna_kin_matrix.rds")
+rna_kin<- readRDS("/home/ckelsey4/rna_data/rna_kin_matrix.rds")
 
 #Normalize RNA Count Data-------------------------------------------------------
 base_meta<- base_meta %>%
@@ -104,7 +104,7 @@ run_emma<- function(eq, re) {
 }
 
 params <- list(
-  c("eq2", "intercept",),
+  c("eq2", "intercept"),
   c("eq2", "slopes"),
   c("eq3", "intercept"),
   c("eq3", "slopes"),

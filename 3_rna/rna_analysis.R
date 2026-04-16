@@ -153,10 +153,8 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
       geom_smooth(method = "lm", linewidth = 0.5) +
       geom_vline(xintercept=0, linetype="dashed") +
       geom_hline(yintercept=0, linetype="dashed") +
-      theme_classic(base_size = 5) +
-      theme(legend.key.width = unit(1, 'mm'), 
-            legend.key.height = unit(5, 'mm'),
-            legend.position = "right") +
+      theme_classic(base_size = 6) +
+      #theme(legend.position = "none") +
       theme(panel.background = element_rect(colour = "black", linewidth=1),
             axis.line = element_line(colour = "black", linewidth = 0.5),
             plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -169,12 +167,12 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
     df %>%
       ggplot(aes(diff, fill = after_stat(x))) +
       geom_histogram(bins = 50) +
-      geom_vline(xintercept=1, linetype="dashed") +
+      geom_vline(xintercept=0, linetype="dashed") +
       geom_vline(xintercept=median(df$diff), linetype="dashed", colour = 'red') +
-      theme_classic(base_size = 5) +
-      theme(legend.key.width = unit(1, 'mm'), 
-            legend.key.height = unit(5, 'mm'),
-            legend.position = "right") +
+      theme_classic(base_size = 6) +
+      theme(legend.position = "none") +
+            #legend.key.width = unit(1, 'mm'), 
+            #legend.key.height = unit(5, 'mm')) +
       theme(panel.background = element_rect(colour = "black", linewidth=1),
             axis.line = element_line(colour = "black", linewidth = 0.5),
             plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -185,31 +183,32 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
   }
 }
 
-within_chron_plot_rna<- compare_plot(rna_int, pval_chron_age, pval_eq2_w, 
-                                     beta_chron_age, beta_eq2_w, "scatter")
+within_chron_plot_rna<- compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
+                                     beta_chron_age, beta_eq3_age, "scatter")
 
 within_chron_plot_rna<- within_chron_plot_rna +
-  scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "green4", midpoint = 0, 
+  scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, 
                         name = "") +
-  xlab("Beta Eq.1 Age") +
-  ylab("Beta Eq.2 Age Within")  +
+  xlab(expression(beta["Eq.1"])) +
+  ylab(expression(beta["Eq.3"]))  +
   xlim(-1.0, 1.0) +
   ylim(-1.0, 1.0) 
 within_chron_plot_rna
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_scatter_rna.svg", 
        within_chron_plot_rna, 
-       height = 55, width = 55, units = "mm")
+       height = 50, width = 50, units = "mm")
 
-within_chron_hist_rna<- compare_plot(rna_int, pval_chron_age, pval_eq2_w, 
-                                     beta_chron_age, beta_eq2_w,"hist")
+within_chron_hist_rna<- compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
+                                     beta_chron_age, beta_eq3_age,"hist")
 within_chron_hist_rna<- within_chron_hist_rna +
-  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "green4", midpoint = 0, name = "") +
-  xlab('| Eq.2 Age Within |/| Eq.1 |') +
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
   ylab("Count")
+within_chron_hist_rna
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_hist_rna.svg", 
        within_chron_hist_rna, 
-       height = 55, width = 55, units = "mm")
+       height = 50, width = 50, units = "mm")
 
 compare_plot(rna_int, pval_eq2_w, pval_eq2_m,
              beta_eq2_w, beta_eq2_m, "scatter")
@@ -233,13 +232,13 @@ generate_counts<- function(rna) {
   age.chron.count<- nrow(rna[rna$pval_chron_age < 0.05,])
   age.w.count<- nrow(rna[rna$pval_eq2_w < 0.05,])
   age.eq3.count<- nrow(rna[rna$pval_eq3_age < 0.05,])
-  total<- data.frame(count = c(age.w.count, age.eq3.count, age.chron.count),
-                      predictor = as.factor(c('Eq2. Within Age', 'Eq3 Age', 'Chron Age')))
+  age.m.count<- nrow(rna[rna$pval_eq2_m < 0.05,])
+  total<- data.frame(count = c(age.w.count, age.eq3.count, age.chron.count, age.m.count),
+                      predictor = as.factor(c('Eq.2 W.', 'Eq.3', 'Eq.1', 'Eq.2 B.')))
   
+  total$predictor<- factor(total$predictor, levels = c('Eq.3', 'Eq.2 W.','Eq.1', "Eq.2 B."))
   total<- total %>%
-    mutate(predictor = as.factor(predictor)) %>%
-    mutate(predictor=fct_reorder(predictor, count, .desc=T),
-           perc_signif = count/nrow(rna))
+    mutate(perc_signif = count/nrow(rna))
   
   return(total)
   
@@ -248,47 +247,49 @@ generate_counts<- function(rna) {
 int_counts<- generate_counts(rna_int)
 slope_counts<- generate_counts(rna_slopes)
 
-signif_counts<- counts %>%
+signif_counts<- int_counts %>%
   ggplot(aes(predictor, count, fill = predictor)) +
   geom_bar(stat = 'identity') +
-  #geom_text(label=counts$count, vjust=-1, size=5) +
-  theme_classic() +
+  geom_text(label=int_counts$count, vjust=-0.25, size=1.5) +
+  theme_classic(base_size=6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
-        axis.title = element_blank(),
-        axis.text = element_blank(),
-        plot.margin = margin(0, 0, 0, 0, "pt")) +
-  xlab("Predictor") +
-  ylab("Count") +
-  scale_fill_manual(values = c("purple", 'green4', 'steelblue2'))
+        plot.margin = margin(1, 1, 1, 1, "pt")) +
+  xlab("Model") +
+  ylab("# Significant DEGs") +
+  scale_fill_manual(values = c("purple", 'green4', 'steelblue2', 'grey30'))
+signif_counts
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/signif_counts_rna.svg", 
        signif_counts, 
-       height = 20, width = 30, units = "mm")
+       height = 50, width = 50, units = "mm")
 
 beta_dist_rna<- rna_int %>%
-  dplyr::select(c(beta_eq2_w, beta_chron_age)) %>%
-  pivot_longer(cols = c(beta_eq2_w, beta_chron_age),
+  dplyr::select(c(beta_eq3_age, beta_eq2_w, beta_chron_age, beta_eq2_m)) %>%
+  pivot_longer(cols = c(beta_eq3_age, beta_eq2_w, beta_chron_age, beta_eq2_m),
                values_to = 'beta',
                names_to = 'var') %>%
-  ggplot(aes(beta, fill=var)) +
-  geom_density(alpha = 0.5, colour = NA) +
-  geom_vline(xintercept = 0, linetype = 'dashed') +
-  scale_fill_manual(values = c('steelblue2', 'green4'),
-                    labels = c("Chron Age", "Eq2. Within Age")) +
-  theme_classic() +
+  mutate(var = factor(var, levels = rev(c("beta_eq2_m", "beta_chron_age",
+                                          "beta_eq2_w", "beta_eq3_age")))) %>%
+  ggplot(aes(var, beta, fill=var)) +
+  geom_violin() +
+  geom_boxplot(width = 0.05, fill = "white", outlier.size = 0.25) +
+  geom_hline(yintercept = 0, linetype = 'dashed') +
+  scale_fill_manual(values = c("purple", 'green4', 'steelblue2', 'grey30')) +
+  theme_classic(base_size=6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
-        axis.title = element_blank(),
-        axis.text = element_blank(),
-        plot.margin = margin(0, 0, 0, 0, "pt")) +
-  ylab("Density") +
-  xlab("Beta")
-
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt")) +
+  scale_x_discrete(labels = c('Eq.3', 'Eq.2 W.','Eq.1', "Eq.2 B.")) +
+  xlab("Model") +
+  ylab("Beta")
+beta_dist_rna
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/beta_dist_rna.svg", 
        beta_dist_rna, 
-       height = 45, width = 60, units = "mm")
+       height = 50, width = 50, units = "mm")
 
 ## Significant regions Venn diagram
 chron.age<- rna_int$outcome[rna_int$pval_chron_age < 0.05]
@@ -346,7 +347,7 @@ eq2_volcano<- rna_int %>%
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
   scale_colour_manual(values = c('steelblue4', 'steelblue1')) +
-  theme_classic(base_size = 7) +
+  theme_classic(base_size = 6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
@@ -354,9 +355,9 @@ eq2_volcano<- rna_int %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         aspect.ratio = 1) +
-  xlab("Beta Eq.1 Age") +
+  xlab(expression(beta["Eq.1"])) +
   ylab("-log10(P-value)")
-
+eq2_volcano
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq2_volcano.svg", 
        eq2_volcano, 
        height = 50, width = 50, units = "mm")
@@ -373,12 +374,12 @@ nrow(rna_int[rna_int$beta_eq2_w<0,])/nrow(rna_int)
 nrow(rna_int[rna_int$beta_eq2_w>0,])
 
 eq3_volcano<- rna_int %>%
-  ggplot(aes(beta_eq2_w, -log10(pval_eq2_w), colour = -log10(pval_eq2_w) < -log10(0.05))) +
+  ggplot(aes(beta_eq3_age, -log10(pval_eq3_age), colour = -log10(pval_eq3_age) < -log10(0.05))) +
   geom_point(alpha = 0.5, size = 0.05) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_hline(yintercept = -log10(0.05), linetype = "dashed") +
-  scale_colour_manual(values = c('green4', 'green1')) +
-  theme_classic(base_size = 7) +
+  scale_colour_manual(values = c("purple","purple4")) +
+  theme_classic(base_size = 6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
@@ -386,8 +387,9 @@ eq3_volcano<- rna_int %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         aspect.ratio = 1) +
-  xlab("Beta Eq.2 Age Within") +
+  xlab(expression(beta["Eq.3"])) +
   ylab("-log10(P-value)")
+
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq3_volcano.svg", 
        eq3_volcano, 
        height = 50, width = 50, units = "mm")
@@ -481,21 +483,20 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/gsea_chron.svg",
        gsea_chron_plot, 
        height = 85, width = 85, units = "mm")
 
-eq2_gsea<- run_gsea(outcome, beta_eq2_w, rna_int, hallmark_list)
+eq3_gsea<- run_gsea(outcome, beta_eq3_age, rna_int, hallmark_list)
 
-gsea_eq2_plot<- eq2_gsea %>%
-  ggplot(aes(x=reorder(pathway, NES), y=NES, fill = NES < 0)) +
-  geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black") +
-  scale_fill_manual(values = c('green3', 'green4')) +
+gsea_eq3_plot<- eq3_gsea %>%
+  ggplot(aes(x=reorder(pathway, NES), y=NES)) +
+  geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black" , fill = 'purple') +
   theme_classic(base_size = 6) +
   theme(legend.position = "none",
         axis.line = element_line(colour = "black", linewidth = 0.5)) +
   ylab("NES") +
   xlab("Hallmark Gene Set") +
   coord_flip()
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/gsea_eq2.svg", 
-       gsea_eq2_plot, 
+gsea_eq3_plot
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/gsea_eq3.svg", 
+       gsea_eq3_plot, 
        height = 85, width = 85, units = "mm")
 
 eq2_m_gsea<- run_gsea(outcome, beta_eq2_m, rna_int, hallmark_list)
@@ -541,103 +542,115 @@ full_gsea %>%
   ylab("NES Eq.1")
 
 #Import promoter pqlseq files---------------------------------------------------
+#Import nested pqlseq model-----------------------------------------------------
 setwd('/scratch/ckelsey4/Cayo_meth/glmer_model_compare')
-import_prom_pqlseq<- function(x, y){
+
+#Define import function
+import_prom_models<- function(model_path, file_string, mod_type){
   
-  #Generate list of file names
-  file_list<- list.files(pattern = x)[1:21]
-  file_order<- str_split_i(file_list, "_", y)
+  file_list<- list.files(path = model_path, pattern = file_string)
+  file_order<- str_split_i(file_list, "_", 5)
   
   #Import glm models as list
-  model_list<- lapply(file_list, readRDS)
+  model_list<- lapply(paste(model_path, file_list, sep = "/"), readRDS)
   
   #Rename list elements
   names(model_list)<- file_order
   
-  #Bind model list to df and add rownames
-  model<- do.call(rbind, model_list)
-  model$outcome2<- model$outcome
-  model$outcome<- str_split_i(model$outcome, "\\.", 2)
-  rownames(model)<- model$region
+  if (mod_type == "eq1") {
+    
+    df_nms<- c(mod_type)
+    
+  } else if (mod_type == "eq2") {
+    
+    df_nms<- c("eq2.w", "eq2.m")
+    
+  } else if (mod_type == "eq3") {
+    
+    df_nms<- c("eq3_age", "eq3.m")
+    
+  }
   
-  #Separate region coordinates into start and end, delete the chr col, and move region col to front
-  #model$outcome2<- model$outcome
-  model<- model %>%
-    separate_wider_delim(outcome2, ".", names = c("chrom", "gene")) %>%
-    dplyr::select(-c(gene))
-  model<- model %>%
-    relocate(c(chrom), .before = n)
-  #model<- model %>%
-  #mutate(chromStart = as.numeric(chromStart))
-
+  mod2<- lapply(model_list, function(mod){
+    
+    names(mod)<- df_nms
+    
+    mod<- lapply(names(mod), function(y){
+      
+      df<- mod[[y]]
+      df<- df %>%
+        dplyr::select(-c(h2, sigma2))
+      
+      colnames(df)<- c("outcome", "n", paste(colnames(df[3:length(df)]), y, sep = "_"))
+      
+      df
+    })
+    
+    names(mod)<- df_nms
+    
+    mod
+    
+  })
+  
+  mod2 <- lapply(df_nms, function(nm) {
+    do.call(rbind, lapply(mod2, function(x) x[[nm]]))
+  })
+  
+  names(mod2)<- df_nms
+  
+  mod2<- lapply(mod2, function(df){
+    
+    df<- df %>%
+      separate_wider_delim(outcome, delim = ".", names = c("chr", "outcome"))
+    
+  })
+  
+  return(mod2)
+  
 }
 
-#Eq.1
-prom_files_eq1<- 'prom_pqlseq2_agechron_'
-prom_pqlseq_eq1<- import_prom_pqlseq(prom_files_eq1, 4)
-prom_pqlseq_eq1<- prom_pqlseq_eq1[, ]
+#Import female and male pqlseq output
+eq1_prom_list<- import_prom_models(model_path = "/home/ckelsey4/age_and_aging/models_out",
+                                   file_string = "dnam_prom_eq1_model", mod_type = "eq1")
 
-#Eq.2
-prom_files_eq2<- 'prom_pqlseq2_within_age_'
-prom_pqlseq_eq2<- import_prom_pqlseq(prom_files_eq2, 5)
-prom_pqlseq_eq2<- prom_pqlseq_eq2[,-c(2:3)]
+eq2_prom_list<- import_prom_models(model_path = "/home/ckelsey4/age_and_aging/models_out",
+                                   file_string = "dnam_prom_eq2_model", mod_type = "eq2")
 
-#Eq.3
-prom_files_eq3<- 'prom_pqlseq2_eq3_'
-prom_pqlseq_eq3<- import_prom_pqlseq(prom_files_eq3, 4)
-prom_pqlseq_eq3<- prom_pqlseq_eq3[,-c(2:3)]
+eq3_prom_list<- import_prom_models(model_path = "/home/ckelsey4/age_and_aging/models_out",
+                                   file_string = "dnam_prom_eq3_model", mod_type = "eq3")
 
-proms<- inner_join(prom_pqlseq_eq1, prom_pqlseq_eq2, by = "outcome")
-proms<- inner_join(proms, prom_pqlseq_eq3, by = "outcome")
+prom_df<- left_join(eq1_prom_list[[1]], eq2_prom_list[[1]][,c(2,4:9)], by = "outcome")
+prom_df<- left_join(prom_df, eq2_prom_list[[2]][,c(2,4:9)], by = "outcome")
+prom_df<- left_join(prom_df, eq3_prom_list[[1]][,c(2,4:9)], by = "outcome")
+prom_df<- left_join(prom_df, eq3_prom_list[[2]][,c(2,4:9)], by = "outcome")
 
-colnames(mm_genes)<- c("outcome", "gene_name")
+rm(eq1_prom_list);rm(eq2_prom_list);rm(eq3_prom_list)
 
 #Assign gene names
-proms<- left_join(proms, mm_genes, by = "outcome")
-proms<- proms %>%
-  mutate(across(4:11, as.numeric)) %>%
+prom_df<- left_join(prom_df, mm_genes, by = "outcome")
+prom_df<- prom_df %>%
   relocate(gene_name, .after = outcome)
-colnames(proms)<- c("ensembl_name", "outcome", "chrom", "n", paste("dnam_", colnames(proms[,5:28]), sep = ""))
+colnames(prom_df)<- c("chr", "ensembl_name", "outcome", "n", 
+                      paste("dnam_", colnames(prom_df[,5:length(prom_df)]), 
+                            sep = ""))
 
-proms<- proms %>%
-  mutate(eq3_chron_diff = abs(dnam_beta_chron_age) - abs(dnam_beta_eq3_age)) %>%
-  arrange(eq3_chron_diff)
+prom_df<- prom_df %>%
+  mutate(eq3_chron_diff = abs(dnam_beta_eq1) - abs(dnam_beta_eq3_age))
 
-within_chron_plot_dnam<- compare_plot(proms, dnam_fdr_chron_age, dnam_fdr_eq3_age, 
-                                      dnam_beta_chron_age, dnam_beta_eq3_age, "scatter")
+within_chron_plot_dnam<- compare_plot(prom_df, dnam_fdr_eq1, dnam_fdr_eq3_age, 
+                                      dnam_beta_eq1, dnam_beta_eq3_age, "scatter")
 within_chron_plot_dnam<- within_chron_plot_dnam +
-  scale_colour_gradient2(low = "steelblue2", mid = "grey70", high = "green4", midpoint = 0, name = "") +
+  scale_colour_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
   xlim(-0.20, 0.20) +
   ylim(-0.20, 0.20)
 
 within_chron_plot_dnam
 
+dna_rna<- inner_join(rna_int, prom_df, by = 'outcome')
 
-df<- proms %>%
-  filter(dnam_fdr_chron_age < .05 | dnam_fdr_eq3_age < .05)
-
-#Prom and cov come from the prom pqlseq script but both these promoters have almost all 0's so need to figure 
-#out what is happening here if the difference in effect sizes is so high
-prom_m<- do.call(rbind, prom_m)
-rownames(prom_m)<- str_split_i(rownames(prom_m), "\\.", 3)
-prom_m2<- t(prom_m[rownames(prom_m) %in% c("ENSMMUG00000002200", "ENSMMUG00000015189"),])
-
-prom_cov<- do.call(rbind, prom_cov)
-ratio<- prom_m/prom_cov
-ratio2<- t(ratio[rownames(ratio) %in% c("ENSMMUG00000002200", "ENSMMUG00000015189"),])
-ratio2<- as.data.frame(cbind(ratio2, long_data$age_at_sampling))
-
-nrow(ratio2[ratio2$ENSMMUG00000002200 == 0,])
-
-ratio2 %>%
-  ggplot(aes(V3, ENSMMUG00000002200)) +
-  geom_point() +
-  geom_smooth(method = 'glm')
-
-age.w_full<- inner_join(rna_int, proms, by = 'outcome')
-
-age.w_full %>%
-  ggplot(aes(dnam_beta, beta_eq2_w)) +
+dna_rna %>%
+  #filter(pval_eq2_w < .20 & dnam_fdr_eq2.w < .20) %>%
+  ggplot(aes(dnam_beta_eq2.w, beta_eq2_w)) +
   geom_point() +
   geom_smooth(method = "lm") +
   geom_hline(yintercept = 0, linetype = "dashed") +
@@ -651,9 +664,9 @@ age.w_full %>%
         plot.margin = margin(1, 1, 1, 1, "pt")) +
   stat_cor(label.x = 0.1)
 
-age.w_full %>%
-  filter(pval_eq2_w < .05 & dnam_fdr < .05) %>%
-  ggplot(aes(as.numeric(dnam_beta), beta_eq2_w)) +
+dna_rna %>%
+  #filter(pval_chron_age < .20 & dnam_fdr_eq1 < .20) %>%
+  ggplot(aes(dnam_beta_eq1, beta_chron_age)) +
   geom_point() +
   geom_smooth(method = "lm") +
   geom_hline(yintercept = 0, linetype = "dashed") +
@@ -665,6 +678,29 @@ age.w_full %>%
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt")) +
-  stat_cor(label.x = -0.3, label.y = -0.8)
+  stat_cor(label.x = 0.05)
+
+#FDR Thresholds
+thresholds <- c(0.01, 0.05, 0.10, 0.15, 0.20, 1.0)
+
+results_eq1<- sapply(thresholds, function(i) {
+  
+  mod<- dna_rna %>%
+    filter(pval_chron_age < i & dnam_fdr_eq1 < i)
+  
+  res<- cor(mod$beta_chron_age, mod$dnam_beta_eq1)
+  
+  res
+})
+
+results_eq2<- sapply(thresholds, function(i) {
+  
+  mod<- dna_rna %>%
+    filter(pval_eq2_w < i & dnam_fdr_eq2.w < i)
+  
+  res<- cor(mod$beta_eq2_w, mod$dnam_beta_eq2.w)
+  
+  res
+})
 
 save.image("/home/ckelsey4/rna_data/rna_analysis.RData")

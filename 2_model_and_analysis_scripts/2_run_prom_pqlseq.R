@@ -10,10 +10,10 @@ SAMP <- as.integer(SAMP)
 
 library(tidyverse)
 library(PQLseq2)
-setwd("/scratch/ckelsey4/Cayo_meth/glmer_model_compare")
+setwd("/home/ckelsey4/age_and_aging/models_out/")
 
 #Generate function--------------------------------------------------------------
-run_pqlseq<- function(pheno, covariates, type){
+run_pqlseq<- function(pheno, covariates){
   
   mod_df<- pqlseq2(Y = meth, x = pheno, 
                    K = kinship, W = covariates, 
@@ -25,26 +25,12 @@ run_pqlseq<- function(pheno, covariates, type){
     relocate(fdr, .after = pvalue) %>%
     dplyr::select(-c(converged, elapsed_time))
   
-  colnames(mod_df)<- c("outcome", "n", paste(names(mod_df[,3:length(mod_df)]), type, sep = "_"))
-  
   return(mod_df)
   
 }
 
 #Import metadata----------------------------------------------------------------
 long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
-
-long_data<- long_data %>%
-  group_by(monkey_id) %>%
-  mutate(n = n()) %>%
-  ungroup()
-
-long_data<- long_data %>%
-  filter(age_at_sampling > 1) %>%
-  filter(n > 1) %>%
-  dplyr::rename(perc_unique = unique) %>%
-  drop_na() %>%
-  arrange(lid_pid)
 
 #Import kinship matrix----------------------------------------------------------
 kinship<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
@@ -84,68 +70,64 @@ if (all.equal(long_data$lid_pid, colnames(prom_cov[[runif(1, 1, 21)]]))) {
   ###################################
   #####           Eq.1          #####
   ###################################
-  #Run PQLseq for chronological age---------------------------------------------
+  #Eq.1-------------------------------------------------------------------------
   #Generate model matrix
   eq1_matrix<- model.matrix(~ age_at_sampling + individual_sex + perc_unique, data = long_data)
-  eq1_phenotype<- eq1_matrix[, 2]
-  eq1_covariates<- as.matrix(eq1_matrix[, 3:4])
+    
+  vars <- c("age_at_sampling")
   
-  #Run pqlseq model
-  agechron_pqlseq2_model<- run_pqlseq(eq1_phenotype, eq1_covariates, "chron_age")
+  eq1_model <- lapply(setNames(vars, vars), function(i) {
+    
+    eq1_phenotype<- eq1_matrix[, i]
+    eq1_covariates<- eq1_matrix[, setdiff(colnames(eq1_matrix), i)]
+    
+    run_pqlseq(eq1_phenotype, eq1_covariates)
+    
+  })
   
   #Save pqlseq model
-  saveRDS(agechron_pqlseq2_model, paste("prom", "pqlseq2", "agechron", SAMP, sep = "_"))
+  saveRDS(eq1_model, paste("dnam_prom_eq1_model", SAMP, sep = "_"))
   
   ###################################
   #####           Eq.2          #####
   ###################################
-  #Run PQLseq for within_age----------------------------------------------------
   #Generate model matrix
   eq2_matrix<- model.matrix(~ within.age + mean.age + individual_sex + perc_unique, data = long_data)
-  eq2_phenotype<- eq2_matrix[, 2]
-  eq2_covariates<- eq2_matrix[, 3:5]
   
-  #Run pqlseq model
-  w.age_pqlseq2_model<- run_pqlseq(eq2_phenotype, eq2_covariates, "eq2_w_age")
+  vars <- c("within.age", "mean.age")
   
-  #Save pqlseq model
-  saveRDS(w.age_pqlseq2_model, paste("prom", "pqlseq2", "within", "age", SAMP, sep = "_"))
-  
-  #Run PQLseq for mean_age------------------------------------------------------
-  #Generate model matrix
-  eq2_m_phenotype<- eq2_matrix[, 3]
-  eq2_m_covariates<- eq2_matrix[, c(2,4:5)]
-  
-  #Run pqlseq model
-  m.age_pqlseq2_model<- run_pqlseq(eq2_m_phenotype, eq2_m_covariates, "eq2_m_age")
+  eq2_model <- lapply(setNames(vars, vars), function(i) {
+    
+    eq2_phenotype <- eq2_matrix[, i]
+    eq2_covariates <- eq2_matrix[, setdiff(colnames(eq2_matrix), i)]
+    
+    run_pqlseq(eq2_phenotype, eq2_covariates)
+    
+  })
   
   #Save pqlseq model
-  saveRDS(m.age_pqlseq2_model, paste("prom", "pqlseq2", "mean", "age", SAMP, sep = "_"))
+  saveRDS(eq2_model, paste("dnam_prom_eq2_model", SAMP, sep = "_"))
   
   ###################################
   #####           Eq.3          #####
   ###################################
   #Run PQLseq for eq3-----------------------------------------------------------
   #Generate model matrix
-  eq3_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + perc_unique, data = long_data)
-  eq3_phenotype<- eq3_matrix[, 2]
-  eq3_covariates<- eq3_matrix[, 3:5]
+ eq3_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + perc_unique, data = long_data)
   
-  #Run pqlseq model
-  eq3_pqlseq2_model<-  run_pqlseq(eq3_phenotype, eq3_covariates, "eq3_age")
+  vars <- c("age_at_sampling", "mean.age")
   
-  #Save pqlseq model
-  saveRDS(eq3_pqlseq2_model, paste("prom", "pqlseq2", "eq3", SAMP, sep = "_"))
-  
-  #Run PQLseq for chronological age---------------------------------------------
-  eq3_m_phenotype<- eq3_matrix[, 3]
-  eq3_m_covariates<- eq3_matrix[, c(2,4:5)]
-  
-  #Run pqlseq model
-  eq3_m_pqlseq2_model<- run_pqlseq(eq3_m_phenotype, eq3_m_covariates, "eq3_age_m")
+ eq3_model <- lapply(setNames(vars, vars), function(i) {
+    
+   eq3_phenotype<- eq3_matrix[, i]
+   eq3_covariates<- eq3_matrix[, setdiff(colnames(eq3_matrix), i)]
+    
+    run_pqlseq(eq3_phenotype,eq3_covariates)
+    
+  })
   
   #Save pqlseq model
-  saveRDS(eq3_m_pqlseq2_model, paste("prom", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
+  saveRDS(eq3_model, paste("dnam_prom_eq3_model", SAMP, sep = "_"))
   
 } else {
   

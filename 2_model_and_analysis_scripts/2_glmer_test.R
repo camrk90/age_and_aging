@@ -50,183 +50,100 @@ names(regions_cov)<- 1:21 #turn all chroms into integers (X = 21)
 names(regions_m)<- 1:21 #turn all chroms into integers (X = 21)
 
 #Model Vectors for lme4---------------------------------------------------------
-cov<- t(regions_cov[[SAMP]])
-meth<- t(regions_m[[SAMP]])
+SAMP<- 1
+cov<- t(regions_cov[[SAMP]])[, 1:50]
+meth<- t(regions_m[[SAMP]])[, 1:50]
 age<- long_data$age_at_sampling
 age.w<- long_data$within.age
 age.m<- long_data$mean.age
 ids<- long_data$monkey_id
 sex<- long_data$individual_sex
+p_unique<- long_data$perc_unique
 
-###################################
-#####   Run Intercept GLMM    #####
-###################################
-#Run GLMMM----------------------------------------------------------------------
-#Generate blank objects for glms
-eq2_df_int<- data.frame(matrix(nrow=0, ncol=21))
-colnames(eq2_df_int)<- c("estimate_(Intercept)", "estimate_age.w", "estimate_age.m", "estimate_sexM",
-                 "se_(Intercept)", "se_age.w", "se_age.m", "se_sexM", 
-                 "z_(Intercept)", "z_age.w", "z_age.m", "z_sexM",
-                 "pval_(Intercept)", "pval_age.w", "pval_age.m", "pval_sexM",
-                 "aic", "bic", "loglik", "converged")
+vars<- c("eq2_int", "eq3_int", "eq2_slope", "eq3_slope")
 
-#Run slope/intercept glm
-for(i in 1:ncol(meth)){
+#Intercepts---------------------------------------------------------------------
+run_glm<- function(eq) {
   
-  rfx=glmer(cbind(meth[, i], cov[, i]) ~ age.w + age.m + sex + (1|ids), 
-            family = binomial(link = "logit"))
+  form <- switch(eq, 
+                 "eq2_int"  = as.formula("cbind(meth[,i],cov[,i]) ~ age.w + age.m + sex + (1|ids)"), 
+                 "eq3_int"  = as.formula("meth[,i]/cov[,i] ~ age + age.m + sex + (1|ids)"),
+                 "eq2_slope"  = as.formula("cbind(meth[,i],cov[,i]) ~ age.w + age.m + sex + (1 + age.w|ids)"), 
+                 "eq3_slope"  = as.formula("meth[,i]/cov[,i] ~ age + age.m + sex + (1 + age|ids)"),
+                 stop("Invalid eq value"))
   
-  slopes<- as.data.frame(ranef(rfx))
-  rfx_sum<- summary(rfx)
-  cfs<- rfx_sum[["coefficients"]]
-  cfs<- as.data.frame(cfs)
-  cfs$term<- rownames(cfs)
-  #cfs<- cfs[1:4, 1:5] #this is for when the batch variable gets incorporated
-  colnames(cfs)<- c("estimate", "se", "z", "pval", "term")
-  rfx_row<- pivot_wider(cfs, names_from = term, values_from = c(estimate, se, z, pval))
-  rfx_row$aic<- rfx_sum[["AICtab"]][["AIC"]]
-  rfx_row$bic<- rfx_sum[["AICtab"]][["BIC"]]
-  rfx_row$loglik<- rfx_sum[["logLik"]]
+  results_list <- vector("list", ncol(meth))
   
-  if(length(rfx@optinfo[["conv"]][["lme4"]]) == 2){
-    rfx_row$converged<- "FALSE"
-  }else{
-    rfx_row$converged<- "TRUE"
+  #Run intercept glm
+  for (i in 1:ncol(meth)) {
+    
+    res <- tryCatch({
+      
+      rfx <- glmer(form, family = binomial(link = "logit"))
+      
+      rfx_sum <- summary(rfx)
+      cfs <- as.data.frame(rfx_sum[["coefficients"]])
+      cfs$term <- rownames(cfs)
+      colnames(cfs) <- c("estimate", "se", "z", "pval", "term")
+      
+      rfx_row <- pivot_wider(cfs,names_from = term,
+                             values_from = c(estimate, se, z, pval))
+      
+      if(length(rfx@optinfo[["conv"]][["lme4"]]) != 0){
+        rfx_row$note<- rfx@optinfo[["conv"]][["lme4"]][["messages"]][[1]]
+      }else{
+        rfx_row$note<- "Converged"
+      }
+      
+      rfx_row<- as.data.frame(rfx_row)
+      rfx_row
+      
+    }, error = function(e) {
+      
+      message(paste("Region", i, "failed:", e$message))
+      
+      # Create NA row
+      na_row <- as.data.frame(matrix(NA, nrow = 1, ncol = ncol(rfx_row)))
+      colnames(na_row) <- colnames(rfx_row)
+      na_row$note<- e$message
+      na_row
+      
+    }, warning = function(w) {
+      
+      message(w$message)
+      
+      rfx_sum <- summary(rfx)
+      cfs <- as.data.frame(rfx_sum[["coefficients"]])
+      cfs$term <- rownames(cfs)
+      colnames(cfs) <- c("estimate", "se", "z", "pval", "term")
+      
+      rfx_row <- pivot_wider(cfs,names_from = term,
+                             values_from = c(estimate, se, z, pval))
+     
+      rfx_row$note<- w$message
+      rfx_row<- as.data.frame(rfx_row)
+      rfx_row
+      
+    })
+    
+    results_list[[i]]<- res
+    
+    #print(paste(i, "of", ncol(rna), "done"))
+    
   }
   
-  eq2_df_int<- rbind(eq2_df_int, rfx_row)
-
+  # bind once at the end
+  df<- do.call(rbind, results_list)
+  
+  df$region<- colnames(meth)
+  
+  return(results_list)
 }
 
-eq2_df_int$region<- colnames(meth)
+out<- run_glm("eq2_int")
+out2<- run_glm("eq2_slope")
 
-#Save outputs to RDS
-saveRDS(eq2_df_int, paste("glmer", "eq2", "int", SAMP, sep = "_"))
-
-#EQ3----------------------------------------------------------------------------
-#Generate blank objects for glms
-eq3_df_int<- data.frame(matrix(nrow=0, ncol=21))
-colnames(eq3_df_int)<- c("estimate_(Intercept)", "estimate_age", "estimate_age.m", "estimate_sexM",
-                     "se_(Intercept)", "se_age", "se_age.m", "se_sexM", 
-                     "z_(Intercept)", "z_age", "z_age.m", "z_sexM",
-                     "pval_(Intercept)", "pval_age", "pval_age.m", "pval_sexM",
-                     "aic", "bic", "loglik", "converged")
-
-#Run slope/intercept glm
-for(i in 1:ncol(meth)){
-  
-  rfx=glmer(cbind(meth[, i], cov[, i]) ~ age + age.m + sex + (1|ids), 
-            family = binomial(link = "logit"))
-  
-  slopes<- as.data.frame(ranef(rfx))
-  rfx_sum<- summary(rfx)
-  cfs<- rfx_sum[["coefficients"]]
-  cfs<- as.data.frame(cfs)
-  cfs$term<- rownames(cfs)
-  #cfs<- cfs[1:4, 1:5] #this is for when the batch variable gets incorporated
-  colnames(cfs)<- c("estimate", "se", "z", "pval", "term")
-  rfx_row<- pivot_wider(cfs, names_from = term, values_from = c(estimate, se, z, pval))
-  rfx_row$aic<- rfx_sum[["AICtab"]][["AIC"]]
-  rfx_row$bic<- rfx_sum[["AICtab"]][["BIC"]]
-  rfx_row$loglik<- rfx_sum[["logLik"]]
-  
-  if(length(rfx@optinfo[["conv"]][["lme4"]]) == 2){
-    rfx_row$converged<- "FALSE"
-  }else{
-    rfx_row$converged<- "TRUE"
-  }
-  
-  eq3_df_int<- rbind(eq3_df_int, rfx_row)
-
-}
-
-#Save outputs to RDS
-saveRDS(eq3_df_int, paste("glmer", "eq3", "int", SAMP, sep = "_"))
-
-###################################
-#####     Run Slope GLMM      #####
-###################################
-#Run GLMMM----------------------------------------------------------------------
-#Generate blank objects for glms
-eq2_df_slopes<- data.frame(matrix(nrow=0, ncol=21))
-colnames(eq2_df_slopes)<- c("estimate_(Intercept)", "estimate_age.w", "estimate_age.m", "estimate_sexM",
-                     "se_(Intercept)", "se_age.w", "se_age.m", "se_sexM", 
-                     "z_(Intercept)", "z_age.w", "z_age.m", "z_sexM",
-                     "pval_(Intercept)", "pval_age.w", "pval_age.m", "pval_sexM",
-                     "aic", "bic", "loglik", "converged")
-
-#Run slope/intercept glm
-for(i in 1:ncol(meth)){
-  
-  rfx=glmer(cbind(meth[, i], cov[, i]) ~ age.w + age.m + sex + (1 + age.w|ids), 
-            family = binomial(link = "logit"))
-  
-  slopes<- as.data.frame(ranef(rfx))
-  rfx_sum<- summary(rfx)
-  cfs<- rfx_sum[["coefficients"]]
-  cfs<- as.data.frame(cfs)
-  cfs$term<- rownames(cfs)
-  #cfs<- cfs[1:4, 1:5] #this is for when the batch variable gets incorporated
-  colnames(cfs)<- c("estimate", "se", "z", "pval", "term")
-  rfx_row<- pivot_wider(cfs, names_from = term, values_from = c(estimate, se, z, pval))
-  rfx_row$aic<- rfx_sum[["AICtab"]][["AIC"]]
-  rfx_row$bic<- rfx_sum[["AICtab"]][["BIC"]]
-  rfx_row$loglik<- rfx_sum[["logLik"]]
-  
-  if(length(rfx@optinfo[["conv"]][["lme4"]]) == 2){
-    rfx_row$converged<- "FALSE"
-  }else{
-    rfx_row$converged<- "TRUE"
-  }
-  
-  eq2_df_slopes<- rbind(eq2_df_slopes, rfx_row)
-  
-}
-
-eq2_df_slopes$region<- colnames(meth)
-
-#Save outputs to RDS
-saveRDS(eq2_df_slopes, paste("glmer", "eq2", "slopes", SAMP, sep = "_"))
-
-#EQ3----------------------------------------------------------------------------
-#Generate blank objects for glms
-eq3_df_slopes<- data.frame(matrix(nrow=0, ncol=21))
-colnames(eq3_df_slopes)<- c("estimate_(Intercept)", "estimate_age", "estimate_age.m", "estimate_sexM",
-                     "se_(Intercept)", "se_age", "se_age.m", "se_sexM", 
-                     "z_(Intercept)", "z_age", "z_age.m", "z_sexM",
-                     "pval_(Intercept)", "pval_age", "pval_age.m", "pval_sexM",
-                     "aic", "bic", "loglik", "converged")
-
-#Run slope/intercept glm
-for(i in 1:ncol(meth)){
-  
-  rfx=glmer(cbind(meth[, i], cov[, i]) ~ age + age.m + sex + (1 + age|ids), 
-            family = binomial(link = "logit"))
-  
-  slopes<- as.data.frame(ranef(rfx))
-  rfx_sum<- summary(rfx)
-  cfs<- rfx_sum[["coefficients"]]
-  cfs<- as.data.frame(cfs)
-  cfs$term<- rownames(cfs)
-  #cfs<- cfs[1:4, 1:5] #this is for when the batch variable gets incorporated
-  colnames(cfs)<- c("estimate", "se", "z", "pval", "term")
-  rfx_row<- pivot_wider(cfs, names_from = term, values_from = c(estimate, se, z, pval))
-  rfx_row$aic<- rfx_sum[["AICtab"]][["AIC"]]
-  rfx_row$bic<- rfx_sum[["AICtab"]][["BIC"]]
-  rfx_row$loglik<- rfx_sum[["logLik"]]
-  
-  if(length(rfx@optinfo[["conv"]][["lme4"]]) == 2){
-    rfx_row$converged<- "FALSE"
-  }else{
-    rfx_row$converged<- "TRUE"
-  }
-  
-  eq3_df_slopes<- rbind(eq3_df_slopes, rfx_row)
-  
-}
-
-#Save outputs to RDS
-saveRDS(eq3_df_slopes, paste("glmer", "eq3", "slopes", SAMP, sep = "_"))
+saveRDS(out, file.path("/home/ckelsey4/rna_data", paste(type, "_glmer", sep = "")))
 
 
 

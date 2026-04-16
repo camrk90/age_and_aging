@@ -16,8 +16,8 @@ setwd("/scratch/ckelsey4/Cayo_meth/glmer_model_compare")
 run_pqlseq<- function(pheno, covariates, type){
   
   mod_df<- pqlseq2(Y = meth, x = pheno, 
-                K = kinship, W = covariates, 
-                lib_size = cov, model="BMM")
+                   K = kinship, W = covariates, 
+                   lib_size = cov, model="BMM")
   
   mod_df<- mod_df %>%
     filter(converged == TRUE) %>%
@@ -31,108 +31,91 @@ run_pqlseq<- function(pheno, covariates, type){
   
 }
 
+#Import methylation data--------------------------------------------------------
+cov<- readRDS("/home/ckelsey4/Cayo_meth/twist_cov_list")
+meth<- readRDS("/home/ckelsey4/Cayo_meth/twist_meth_list")
+
 #Import metadata----------------------------------------------------------------
-long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
+long_data<- read.table("/home/ckelsey4/Cayo_meth/twist_metadata.txt", sep = "\t", header=T)
 
 #Import kinship matrix----------------------------------------------------------
-kinship<- readRDS("/scratch/ckelsey4/Cayo_meth/full_kin_matrix")
+kinship<- readRDS("/home/ckelsey4/Cayo_meth/dnam_kin_matrix.rds")
 
 #Subset and rearrange kinship rows and cols to match metadata
-kinship<- kinship[long_data$lid_pid, long_data$lid_pid]
-
-#Import m/cov rds------------------------------------------------------------
-# load region lists that have been filtered for 5x coverage in 90% of samples
-regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered2.rds")
-regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered2.rds")
-
-#Filter metadata to lids in regions list
-long_data<- long_data[long_data$lid_pid %in% colnames(regions_cov[[1]]),]
-
-regions_cov<- lapply(names(regions_cov), function(x){
-  regions_cov<- subset(regions_cov[[x]], select=long_data$lid_pid)
-  return(regions_cov)
-})
-
-regions_m<- lapply(names(regions_m), function(x){
-  regions_m<- subset(regions_m[[x]], select=long_data$lid_pid)
-  return(regions_m)
-})
-
-names(regions_cov)<- 1:21 #turn all chroms into integers (X = 21)
-names(regions_m)<- 1:21 #turn all chroms into integers (X = 21)
+kinship<- kinship[long_data$vantage_id, long_data$vantage_id]
 
 #Check metadata lids match the lids (cols) of a random chromosome
-if (all.equal(long_data$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
+if (all.equal(long_data$vantage_id, colnames(cov[[runif(1, 1, 21)]]))) {
   
   #Model Vectors for lme4-------------------------------------------------------
-  cov<- regions_cov[[SAMP]]
-  meth<- regions_m[[SAMP]]
+  cov<- cov[[SAMP]]
+  meth<- meth[[SAMP]]
   
   ###################################
   #####           Eq.1          #####
   ###################################
   #Run PQLseq for chronological age---------------------------------------------
   #Generate model matrix
-  eq1_matrix<- model.matrix(~ age_at_sampling + individual_sex + university, data = long_data)
+  eq1_matrix<- model.matrix(~ age + subject_sex + plate_id, data = long_data)
   eq1_phenotype<- eq1_matrix[, 2]
-  eq1_covariates<- as.matrix(eq1_matrix[, 3:4])
-  
+  eq1_covariates<- as.matrix(eq1_matrix[, 3:10])
+
   #Run pqlseq model
   agechron_pqlseq2_model<- run_pqlseq(eq1_phenotype, eq1_covariates, "chron_age")
-  
+
   #Save pqlseq model
-  saveRDS(agechron_pqlseq2_model, paste("wb", "pqlseq2", "agechron", SAMP, sep = "_"))
+  saveRDS(agechron_pqlseq2_model, paste("twist", "pqlseq2", "agechron", SAMP, sep = "_"))
   
   ###################################
   #####           Eq.2          #####
   ###################################
   #Run PQLseq for within_age----------------------------------------------------
   #Generate model matrix
-  eq2_matrix<- model.matrix(~ within.age + mean.age + individual_sex + university, data = long_data)
+  eq2_matrix<- model.matrix(~ within_age + mean_age + subject_sex + plate_id, data = long_data)
   eq2_phenotype<- eq2_matrix[, 2]
-  eq2_covariates<- eq2_matrix[, 3:5]
+  eq2_covariates<- eq2_matrix[, 3:11]
   
   #Run pqlseq model
   w.age_pqlseq2_model<- run_pqlseq(eq2_phenotype, eq2_covariates, "eq2_w_age")
   
   #Save pqlseq model
-  saveRDS(w.age_pqlseq2_model, paste("wb", "pqlseq2", "within", "age", SAMP, sep = "_"))
+  saveRDS(w.age_pqlseq2_model, paste("twist", "pqlseq2", "within", "age", SAMP, sep = "_"))
   
   #Run PQLseq for mean_age------------------------------------------------------
   #Generate model matrix
   eq2_m_phenotype<- eq2_matrix[, 3]
-  eq2_m_covariates<- eq2_matrix[, c(2,4:5)]
+  eq2_m_covariates<- eq2_matrix[, c(2,4:11)]
   
   #Run pqlseq model
   m.age_pqlseq2_model<- run_pqlseq(eq2_m_phenotype, eq2_m_covariates, "eq2_m_age")
   
   #Save pqlseq model
-  saveRDS(m.age_pqlseq2_model, paste("wb", "pqlseq2", "mean", "age", SAMP, sep = "_"))
+  saveRDS(m.age_pqlseq2_model, paste("twist", "pqlseq2", "mean", "age", SAMP, sep = "_"))
   
   ###################################
   #####           Eq.3          #####
   ###################################
   #Run PQLseq for eq3-----------------------------------------------------------
   #Generate model matrix
-  eq3_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + university, data = long_data)
+  eq3_matrix<- model.matrix(~ age + mean_age + subject_sex + plate_id, data = long_data)
   eq3_phenotype<- eq3_matrix[, 2]
-  eq3_covariates<- eq3_matrix[, 3:5]
+  eq3_covariates<- eq3_matrix[, 3:11]
   
   #Run pqlseq model
   eq3_pqlseq2_model<-  run_pqlseq(eq3_phenotype, eq3_covariates, "eq3_age")
   
   #Save pqlseq model
-  saveRDS(eq3_pqlseq2_model, paste("wb", "pqlseq2", "eq3", SAMP, sep = "_"))
+  saveRDS(eq3_pqlseq2_model, paste("twist", "pqlseq2", "eq3", SAMP, sep = "_"))
   
   #Run PQLseq for chronological age---------------------------------------------
   eq3_m_phenotype<- eq3_matrix[, 3]
-  eq3_m_covariates<- eq3_matrix[, c(2,4:5)]
+  eq3_m_covariates<- eq3_matrix[, c(2,4:11)]
   
   #Run pqlseq model
   eq3_m_pqlseq2_model<- run_pqlseq(eq3_m_phenotype, eq3_m_covariates, "eq3_age_m")
   
   #Save pqlseq model
-  saveRDS(eq3_m_pqlseq2_model, paste("wb", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
+  saveRDS(eq3_m_pqlseq2_model, paste("twist", "pqlseq2", "eq3", "m", SAMP, sep = "_"))
   
 } else {
   

@@ -35,7 +35,7 @@ run_pqlseq<- function(pheno, covariates, type){
 }
 
 #Import metadata----------------------------------------------------------------
-blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt")
+blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt", sep = "\t", header = T)
 long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
 
 long_ids<- unique(long_data$monkey_id)
@@ -52,9 +52,6 @@ blood_metadata<- blood_metadata[!blood_metadata$lid_pid %in% lids_to_remove$lid_
 blood_metadata<- blood_metadata %>%
   filter(age_at_sampling > 1)
 
-overlap_lids<- overlap_lids %>%
-  filter(age_at_sampling > 1)
-
 rm(lids_to_remove);rm(long_data);rm(long_ids)
 
 #Import kinship matrix----------------------------------------------------------
@@ -65,8 +62,8 @@ kinship<- kinship[blood_metadata$lid_pid, blood_metadata$lid_pid]
 
 #Import m/cov rds------------------------------------------------------------
 # load region lists that have been filtered for 5x coverage in 90% of samples
-regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered.rds")
-regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered.rds")
+regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered2.rds")
+regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered2.rds")
 
 #Filter metadata to lids in regions list
 blood_metadata<- blood_metadata[blood_metadata$lid_pid %in% colnames(regions_cov[[1]]),]
@@ -96,15 +93,21 @@ if (all.equal(blood_metadata$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]])))
   ###################################
   #Run PQLseq-------------------------------------------------------------------
   #Generate model matrix
-  predictor_matrix<- model.matrix(~ age_at_sampling + individual_sex + unique, data = blood_metadata)
-  age_pheno<- predictor_matrix[, 2]
-  age_cov<- predictor_matrix[, 3:4]
+  cs_matrix<- model.matrix(~ age_at_sampling + individual_sex + university, data = blood_metadata)
   
-  #Run pqlseq model
-  cs_model<- run_pqlseq(age_pheno, age_cov, "cross")
+  vars <- c("age_at_sampling", "individual_sexM")
+  
+  cs_model <- lapply(setNames(vars, vars), function(i) {
+    
+    cs_phenotype <- cs_matrix[, i]
+    cs_covariates <- cs_matrix[, setdiff(colnames(cs_matrix), i)]
+    
+    run_pqlseq(cs_phenotype, cs_covariates)
+    
+  })
   
   #Save pqlseq model
-  saveRDS(cs_model, paste("cs", "pqlseq2", "age", SAMP, sep = "_"))
+  saveRDS(cs_model, paste("cs_pqlseq2_age", SAMP, sep = "_"))
   
 } else {
   

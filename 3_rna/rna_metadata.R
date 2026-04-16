@@ -91,6 +91,12 @@ rna_meta<- rna_meta %>%
 base_meta<- rna_meta %>%
   filter(Stimulation == "H2O")
 
+base_meta<- base_meta %>% 
+  group_by(animal_ID) %>% 
+  mutate(n = n()) %>%
+  filter(n > 1) %>%
+  ungroup()
+
 write.table(base_meta, "/home/ckelsey4/rna_data/base_meta.txt", quote = F)
 write.table(rna_meta, "/home/ckelsey4/rna_data/rna_meta.txt", quote = F)
 
@@ -99,22 +105,6 @@ base_meta<- base_meta %>%
   group_by(animal_ID) %>%
   mutate(min_age = min(trapped_age))
 base_meta$trapped_age<- round(base_meta$trapped_age, 0)
-
-base_meta %>%
-  ggplot(aes(x=trapped_age, y=reorder(animal_ID, min_age), colour=sex)) +
-  geom_path(linewidth = 1.2, alpha = 0.8) +
-  geom_point(colour="black", cex = 1) +
-  scale_x_continuous(breaks = seq(0, 30, by=5)) +
-  coord_cartesian(xlim = c(0, 30)) +
-  scale_colour_manual(values = c("red3", "pink2"), name = "Sex") +
-  ylab("Individual") +
-  xlab("Age") +
-  theme_classic(base_size = 24) +
-  theme(axis.text.y=element_blank(),
-        axis.ticks.y=element_blank()) +
-  #theme(legend.key.height= unit(2, 'cm')) +
-  #theme(legend.position = "none") +
-  theme(panel.background = element_rect(colour = "black", linewidth=2))
 
 samples_dist_rna<- base_meta %>%
   ggplot(aes(x=trapped_age, y=reorder(animal_ID, min_age), colour=sex)) +
@@ -126,7 +116,8 @@ samples_dist_rna<- base_meta %>%
   ylab("Individual") +
   xlab("Age") +
   theme_classic(base_size = 6) +
-  theme(panel.background = element_rect(colour = "black", linewidth=1),
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y=element_blank(),
@@ -136,24 +127,7 @@ samples_dist_rna<- base_meta %>%
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/samples_dist_rna.svg", 
        samples_dist_rna, 
-       height = 95, width = 65, units = "mm")
-
-#Age distribution
-base_meta %>%
-  ggplot(aes(x=trapped_age, fill=as.factor(sex))) +
-  geom_bar(colour='black', position = 'dodge') +
-  scale_x_continuous(breaks = seq(5, 30, by=5)) +
-  coord_cartesian(xlim = c(5, 30)) +
-  scale_fill_manual(values = c("red3", "pink2"), name = "Sex") +
-  ylab("Count") +
-  xlab("Age") +
-  theme_classic(base_size = 24) +
-  theme(legend.position = "none") +
-  theme(panel.background = element_rect(colour = "black", linewidth=3))
-
-base_meta<- base_meta %>% 
-  group_by(animal_ID) %>%
-  mutate(n = n())
+       height = 85, width = 55, units = "mm")
 
 #N Samples
 n_samples_rna<- base_meta %>%
@@ -167,6 +141,7 @@ n_samples_rna<- base_meta %>%
         axis.line = element_line(colour = "black", linewidth = 0.25),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         legend.position = "none")
+
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/n_samples_rna.svg", 
        n_samples_rna, 
        height = 20, width = 30, units = "mm")
