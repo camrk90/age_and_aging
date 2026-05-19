@@ -58,19 +58,19 @@ rna_slopes<- rna_slopes %>%
          eq2w_eq2m_diff = beta_eq2_m - beta_eq2_w)
 
 #Compare slopes vs intercepts---------------------------------------------------
-eq2_eq3_intercept<- rna_int %>%
+rna_int %>%
   ggplot(aes(beta_eq2_w, beta_eq3_age)) +
   geom_point(size = 0.5, alpha = 0.5) +
   geom_vline(xintercept=0, linetype="dashed") +
   geom_hline(yintercept=0, linetype="dashed") +
-  theme_classic(base_size=6) +
+  scale_color_gradient2(low = "purple", mid = "grey70", high = "green4", midpoint = 0, name = "") +
+  theme_classic(base_size=24) +
   theme(panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         aspect.ratio = 1,
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
-  stat_cor() +
   xlab(expression(beta["Eq.2"])) +
   ylab(expression(beta["Eq.3"]))
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq2_eq3_scatterplot_rna.svg", 
@@ -153,8 +153,8 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
       geom_smooth(method = "lm", linewidth = 0.5) +
       geom_vline(xintercept=0, linetype="dashed") +
       geom_hline(yintercept=0, linetype="dashed") +
-      theme_classic(base_size = 6) +
-      #theme(legend.position = "none") +
+      theme_classic(base_size = 18) +
+      theme(legend.position = "none") +
       theme(panel.background = element_rect(colour = "black", linewidth=1),
             axis.line = element_line(colour = "black", linewidth = 0.5),
             plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -169,7 +169,7 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
       geom_histogram(bins = 50) +
       geom_vline(xintercept=0, linetype="dashed") +
       geom_vline(xintercept=median(df$diff), linetype="dashed", colour = 'red') +
-      theme_classic(base_size = 6) +
+      theme_classic(base_size = 18) +
       theme(legend.position = "none") +
             #legend.key.width = unit(1, 'mm'), 
             #legend.key.height = unit(5, 'mm')) +

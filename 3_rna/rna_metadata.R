@@ -106,16 +106,16 @@ base_meta<- base_meta %>%
   mutate(min_age = min(trapped_age))
 base_meta$trapped_age<- round(base_meta$trapped_age, 0)
 
-samples_dist_rna<- base_meta %>%
+base_meta %>%
   ggplot(aes(x=trapped_age, y=reorder(animal_ID, min_age), colour=sex)) +
   geom_path(linewidth = 0.5) +
   geom_point(colour="black", size = 0.25) +
   scale_x_continuous(breaks = seq(5, 30, by=5)) +
   coord_cartesian(xlim = c(5, 30)) +
-  scale_colour_manual(values = c("red3", "pink2"), name = "Sex") +
+  scale_colour_manual(values = c("red3", "royalblue3"), name = "Sex") +
   ylab("Individual") +
   xlab("Age") +
-  theme_classic(base_size = 6) +
+  theme_classic(base_size = 18) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),

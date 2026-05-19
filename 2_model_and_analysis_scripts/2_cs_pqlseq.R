@@ -62,8 +62,8 @@ kinship<- kinship[blood_metadata$lid_pid, blood_metadata$lid_pid]
 
 #Import m/cov rds------------------------------------------------------------
 # load region lists that have been filtered for 5x coverage in 90% of samples
-regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered2.rds")
-regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered2.rds")
+regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered_cs.rds")
+regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered_cs.rds")
 
 #Filter metadata to lids in regions list
 blood_metadata<- blood_metadata[blood_metadata$lid_pid %in% colnames(regions_cov[[1]]),]

@@ -52,7 +52,7 @@ import_pqlseq<- function(x, y){
 #Metadata
 long_data<- read.table("/scratch/ckelsey4/Cayo_meth/long_data_adjusted.txt")
 
-blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt")
+blood_metadata<- read.table("/scratch/ckelsey4/Cayo_meth/blood_metadata_full.txt", sep = "\t", header = T)
 
 long_ids<- unique(long_data$monkey_id)
 
@@ -165,8 +165,8 @@ age_trunc<- age_full %>%
            within_chron_diff, eq3_chron_diff, #diffs
            within_chron_ratio, eq3_chron_ratio)) #ratios
 
-rm(eq2_age_w_pqlseq);rm(eq2_age_m_pqlseq);rm(chron_age_pqlseq)
-rm(long_cross_pqlseq);rm(eq3_age_pqlseq);rm(eq3_age_m_pqlseq)
+rm(eq2_age_w_rrbs);rm(eq2_age_m_rrbs);rm(chron_age_rrbs)
+rm(long_cross_pqlseq);rm(eq3_age_rrbs);rm(eq3_age_m_rrbs)
 
 #Twist--------------------------------------------------------------------------
 #Chronological Age
@@ -228,13 +228,13 @@ long_data<- long_data %>%
   mutate(min_age = min(age_at_sampling))
 long_data$age_at_sampling<- round(long_data$age_at_sampling, 0)
 
-samples_dist_dnam<- long_data %>%
+long_data %>%
   ggplot(aes(x=age_at_sampling, y=reorder(monkey_id, min_age), colour=individual_sex)) +
   geom_path(linewidth = 0.5) +
   geom_point(colour="black", size = 0.25) +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
   coord_cartesian(xlim = c(0, 30)) +
-  scale_colour_manual(values = c("red3", "pink2"), name = "Sex") +
+  scale_colour_manual(values = c("red3", "royalblue3"), name = "Sex") +
   theme_classic(base_size = 6) +
   theme(legend.position = "none", 
         panel.background = element_rect(colour = "black", linewidth=1),
@@ -263,7 +263,7 @@ long_data %>%
   theme(panel.background = element_rect(colour = "black", linewidth=3))
 
 #N Samples
-n_samples<- long_data %>%
+long_data %>%
   ggplot(aes(x=n, fill=as.factor(individual_sex))) +
   geom_bar(position = 'dodge') +
   scale_fill_manual(values = c("red3", "pink2"), name = "Sex") +
@@ -280,7 +280,7 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/n_samples_dnam.svg",
 
 
 age_full %>%
-  select(c(beta_within_age, beta_chron_age, beta_long_cross, beta_mean_age)) %>%
+  dplyr::select(c(beta_chron_age, beta_eq2_w_age, beta_eq2_m_age, beta_eq3_age)) %>%
   cor(use="pairwise.complete.obs") %>%
   ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=5, sig.level = 0.05, insig = "blank")
 
@@ -412,19 +412,19 @@ rownames(results_df) <- paste0("FDR_", thresholds)
 results_df$fdr_threshold<- rownames(results_df)
 
 results_df<- results_df %>%
-  pivot_longer(cols = c(fdr_cross, fdr_chron_age, fdr_eq2_w_age, fdr_eq3_age),
+  pivot_longer(cols = c(fdr_chron_age, fdr_eq2_w_age, fdr_eq3_age),
                names_to = "model",
                values_to = "count")
 results_df$fdr_threshold<- as.numeric(str_split_i(results_df$fdr_threshold, "_", 2))
 
 results_df %>%
-  filter(model != "fdr_eq3_age") %>%
   ggplot(aes(fdr_threshold, count, colour = model)) +
   geom_point() +
   geom_path() +
-  scale_colour_manual(values = c("darkgoldenrod2","steelblue1", "green4"), name = "") +
-  theme_classic(base_size = 6) +
-  theme(panel.background = element_rect(colour = "black", linewidth=1),
+  scale_colour_manual(values = c("steelblue1", "green4", "purple"), name = "") +
+  theme_classic(base_size = 18) +
+  theme(legend.position = "none", 
+        panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         aspect.ratio = 1,
@@ -433,7 +433,7 @@ results_df %>%
 
 beta_thresholds<- c(0.25, 0.20, 0.15, 0.10, 0.05, 0.025, 0.01, 0.001)
 
-res <- map_dfr(thresholds, function(x) {
+res <- map_dfr(beta_thresholds, function(x) {
   
   df <- age_trunc %>%
     filter(fdr_eq3_age_m < x)
@@ -460,7 +460,27 @@ res %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   scale_x_continuous(breaks = seq(0, -0.30, -0.05)) +
   ylab("Pearson Correlation") +
-  xlab(expression(beta["Eq.3"] ~ "FDR Threshold"))
+  xlab(expression(beta["Eq.3 Between"] ~ "FDR Threshold"))
+
+age_full %>%
+  dplyr::select(c(pvalue_chron_age, pvalue_eq3_age)) %>%
+  pivot_longer(cols = c(pvalue_chron_age, pvalue_eq3_age),
+               names_to = c(".value", "var"),
+               names_sep = "_") %>%
+  ggplot(aes(pvalue, fill=var)) +
+  geom_histogram(alpha = 0.3, colour="black", bins = 100, position = "identity") +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "red") +
+  #scale_fill_manual(values = c("red3", 'royalblue3'), name = "Sex") +
+  theme_classic(base_size=18) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  ylab("Count") +
+  xlab(expression(beta))
 
 #### Coefficient comparisons ---------------------------------------------------
 #Generate plot function
@@ -491,22 +511,22 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
     
     df %>%
       ggplot(aes({{var1}}, {{var2}}, colour = diff)) +
-      geom_point(size = 1, alpha = 0.8) +
+      geom_point(size = 0.5) +
       geom_abline() +
       geom_smooth(method = "lm", linewidth = 0.5) +
       geom_vline(xintercept=0, linetype="dashed") +
       geom_hline(yintercept=0, linetype="dashed") +
       theme_classic(base_size = 6) +
-      theme(legend.key.width = unit(5, 'mm'), 
-            legend.key.height = unit(1, 'mm'),
-            legend.position = "top") +
+      #theme(legend.key.width = unit(2, 'mm'), 
+            #legend.key.height = unit(10, 'mm'),
+            #legend.position = "right") +
+      theme(legend.position = "none") +
       theme(panel.background = element_rect(colour = "black", linewidth=1),
             axis.line = element_line(colour = "black", linewidth = 0.5),
             plot.margin = margin(1, 1, 1, 1, "pt"),
             aspect.ratio = 1,
             panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-            panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
-      stat_cor()
+            panel.grid.minor = element_line(color = "grey98", linewidth = 0.5))
     
   } else if (plot_type == "hist") {
     
@@ -516,9 +536,7 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
       geom_vline(xintercept=0, linetype="dashed") +
       geom_vline(xintercept=median(df$diff), linetype="dashed", colour = 'red') +
       theme_classic(base_size = 6) +
-      theme(legend.key.width = unit(5, 'mm'), 
-            legend.key.height = unit(1, 'mm'),
-            legend.position = "top") +
+      theme(legend.position = "none") +
       theme(panel.background = element_rect(colour = "black", linewidth=1),
             axis.line = element_line(colour = "black", linewidth = 0.5),
             plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -592,24 +610,25 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_hist.svg",
 #Eq.1 vs Eq.3
 eq3_chron_plot<- compare_plot(age_trunc, fdr_chron_age, fdr_eq3_age,
                               beta_chron_age, beta_eq3_age,"scatter")
-eq3_chron_plot<- within_chron_plot + 
+eq3_chron_plot + 
   scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
   xlim(-0.2, 0.2) +
   ylim(-0.2, 0.2) +
   xlab(expression(beta["Eq.1"])) +
   ylab(expression(beta["Eq.3"]))
-eq3_chron_plot
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq3_chron_scatter.svg", 
-       eq3_chron_plot, 
-       height = 45, width = 45, units = "mm")
+       height = 60, width = 60, units = "mm")
 
 eq3_chron_hist<- compare_plot(age_trunc, fdr_chron_age, fdr_eq3_age,
-                              beta_chron_age, beta_eq3_age,
-                              "purple", "steelblue2", "hist")
+                              beta_chron_age, beta_eq3_age,"hist")
+eq3_chron_hist + 
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
+  ylab("Count")
+
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq3_chron_hist.svg", 
-       eq3_chron_hist, 
-       height = 45, width = 45, units = "mm")
+       height = 60, width = 60, units = "mm")
 
 #Eq.2 vs Eq.3
 eq2_eq3<- compare_plot(age_trunc, fdr_eq2_w_age, fdr_eq3_age,
@@ -626,7 +645,7 @@ eq2_eq3
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq2_eq3_scatterplot_dnam.svg", 
        eq2_eq3, 
-       height = 45, width = 45, units = "mm")
+       height = 90, width = 90, units = "mm")
 
 #Counts and Beta Distributions
 count_signif_regions<- function(x) {
@@ -648,57 +667,42 @@ count_signif_regions<- function(x) {
     mutate(perc_signif = count/nrow(df))
   
   counts_plot<- counts %>%
-    ggplot(aes(predictor, count, fill = predictor)) +
+    ggplot(aes(reorder(predictor, count), count, fill = predictor)) +
     geom_bar(stat = 'identity') +
-    geom_text(label=counts$count, vjust=-0.25, size = 1.5) +
-    theme_classic(base_size = 12) +
+    geom_text(label=counts$count, vjust=-0.25, size = 1) +
+    theme_classic(base_size = 6) +
     theme(legend.position = "none",
           panel.background = element_rect(colour = "black", linewidth=1),
           axis.line = element_line(colour = "black", linewidth = 0.5),
           axis.title.x = element_blank(),
           plot.margin = margin(1, 1, 1, 1, "pt")) +
-    xlab("Predictor") +
-    ylab("Count")
+    ylab("# Significant Regions")
   
   return(list(plot = counts_plot, df = counts))
   
 }
 
-counts<- count_signif_regions(age_trunc)
+counts<- count_signif_regions(age_trunc[, c(7,9,11,13)])
+counts[["plot"]] +
+  scale_fill_manual(values = c("steelblue2", "grey30", 'green4', "purple")) +
+  scale_x_discrete(labels = c("chron_age" = "Eq.1", "eq2_w_age" = "Eq.2 Within", 
+                              "eq2_m_age" = "Eq.2 Btwn", "eq3_age" = "Eq.3 Within"))
 
-
-signif_counts<-counts %>%
-  ggplot(aes(predictor, count, fill = predictor)) +
-  geom_bar(stat = 'identity') +
-  geom_text(label=counts[,2], vjust=-0.25, size = 1.5) +
-  theme_classic(base_size = 6) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=1),
-        axis.line = element_line(colour = "black", linewidth = 0.5),
-        axis.title.x = element_blank(),
-        plot.margin = margin(1, 1, 1, 1, "pt")) +
-  scale_y_continuous(breaks = seq(0, 25000, 5000)) +
-  xlab("Predictor") +
-  ylab("Count") +
-  scale_fill_manual(values = c("purple", 'green4', "steelblue2", "darkgoldenrod2", "grey30"))
-signif_counts
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/signif_counts.svg", 
-       signif_counts, 
-       height = 45, width = 65, units = "mm")
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/signif_counts.svg",
+       height = 65, width = 65, units = "mm")
 
 #Distribution of effect sizes for each variable
-beta_dist<- age_full %>%
-  dplyr::select(c(beta_eq3_age, beta_eq2_w_age, beta_eq2_m_age, beta_chron_age, beta_cross)) %>%
-  pivot_longer(cols = c(beta_eq3_age, beta_eq2_w_age, beta_eq2_m_age, beta_chron_age, beta_cross),
+age_full %>%
+  dplyr::select(c(beta_eq3_age, beta_eq2_w_age, beta_eq2_m_age, beta_chron_age)) %>%
+  pivot_longer(cols = c(beta_eq3_age, beta_eq2_w_age, beta_eq2_m_age, beta_chron_age),
                values_to = 'beta',
                names_to = 'var') %>%
-  mutate(var = factor(var, levels = rev(c("beta_eq2_m_age", "beta_chron_age", "beta_cross",
-                                      "beta_eq2_w_age", "beta_eq3_age")))) %>%
+  mutate(var = factor(var, levels = rev(c("beta_eq3_age", "beta_eq2_w_age", "beta_chron_age", "beta_eq2_m_age")))) %>%
   ggplot(aes(var, beta, fill=var)) +
   geom_violin() +
   geom_boxplot(width = 0.1, fill = "white", outlier.size = 0.25) +
   geom_hline(yintercept = 0, linetype = 'dashed') +
-  scale_fill_manual(values = c("purple","green4",'darkgoldenrod2','steelblue2','grey30')) +
+  scale_fill_manual(values = c("grey30", "steelblue2", "green4", "purple")) +
   theme_classic(base_size = 6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
@@ -707,12 +711,11 @@ beta_dist<- age_full %>%
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5),
         axis.title.x = element_blank()) +
-  scale_x_discrete(labels = c("Eq.3 W.","Eq.2 W.","CS","Eq.1","Eq.2 B.")) +
-  ylab("Beta")
-beta_dist
+  scale_x_discrete(labels = c("Eq.2 Btwn", "Eq.1", "Eq.2 Within.", "Eq.3 Within")) +
+  ylab(expression(beta))
+
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/beta_dist_dnam.svg", 
-       beta_dist, 
-       height = 45, width = 65, units = "mm")
+       height = 65, width = 65, units = "mm")
 
 ## Significant regions Venn diagram
 cross.age<- age_trunc$outcome[age_trunc$fdr_cross< 0.05]
@@ -722,18 +725,14 @@ eq2.btwn<- age_trunc$outcome[age_trunc$fdr_eq2_m_age < 0.05]
 eq3<- age_trunc$outcome[age_trunc$fdr_eq3_age < 0.05]
 
 venn_all<- list(cross.age, chron.age, age.w, eq3, eq2.btwn)
-names(venn_all)<- c("cross.age", "chron.age", "age.w", "eq3", "eq2.btwn")
+names(venn_all)<- c("Cross", "Eq.1", "Eq.2 Within", "Eq.3 Within", "Eq.2 Btwn")
 
-ggvenn(venn_list2,
-       text_size = 8,
-       show_percentage = F)
-
-upset(fromList(venn_all), order.by = "freq", 
-      text.scale = c(2, 2, 2, 1, 2, 1.5), 
+upset(fromList(venn_all[2:5]), order.by = "freq", 
+      text.scale = c(1, 1, 1, 1, 1, 1), 
       line.size = 1, point.size = 2)
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/n_samples.svg", 
-       n_samples, 
-       height = 16, width = 24, units = "mm")
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/intersect.svg",
+       height = 45, width = 65, units = "mm")
 
 ######################################
 ###      JOIN INTERSECT FILES      ###   
@@ -750,7 +749,7 @@ promoters<- promoters %>%
   filter(chr != "Y")
 
 #Promoters----------------------------------------------------------------------
-pqlseq_prom<- left_join(promoters, age_trunc, by = c("region_range", "chr"))
+pqlseq_prom<- left_join(promoters, age_full, by = c("region_range", "chr"))
 pqlseq_prom<- pqlseq_prom %>%
   drop_na() %>%
   distinct(anno, .keep_all = T)
@@ -1121,118 +1120,130 @@ pqlseq_anno$eq3_chron[pqlseq_anno$fdr_eq3_age < 0.05 & pqlseq_anno$fdr_chron_age
 pqlseq_anno$eq3_chron[pqlseq_anno$fdr_eq3_age < 0.05 & pqlseq_anno$fdr_chron_age > 0.05]<- "Eq3 Age Significant"
 pqlseq_anno$eq3_chron[pqlseq_anno$fdr_eq3_age > 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Chron Age Significant"
 
-#Hypo Enrichment
+#Eq3-Eq.1 Enrichment
 within_chron_hypo<- enrichment_uniq(pqlseq_anno, 
-                                    "within_chron", "eq2_w_signif",
-                                    "Within Age Significant", "Age-Hypomethylated")
+                                    "eq3_chron", "eq3_age_signif",
+                                    "Eq3 Age Significant", "Age-Hypomethylated")
 
-chron_hypo<- enrichment(pqlseq_anno, "chron_signif", "Age-Hypomethylated")
-
-cross_hypo<- enrichment(pqlseq_anno, "cross_signif", "Age-Hypomethylated")
-
-#Hyper Enrichment
 within_chron_hyper<- enrichment_uniq(pqlseq_anno, 
-                                    "within_chron", "eq2_w_signif",
-                                    "Within Age Significant", "Age-Hypermethylated")
+                                     "eq3_chron", "eq3_age_signif",
+                                     "Eq3 Age Significant", "Age-Hypermethylated")
 
+#Eq.1 Enrichment
+chron_hypo<- enrichment(pqlseq_anno, "chron_signif", "Age-Hypomethylated")
 chron_hyper<- enrichment(pqlseq_anno, "chron_signif", "Age-Hypermethylated")
 
+#Cross-sectional Enrichment
+cross_hypo<- enrichment(pqlseq_anno, "cross_signif", "Age-Hypomethylated")
 cross_hyper<- enrichment(pqlseq_anno, "cross_signif", "Age-Hypermethylated")
 
-#Chromatin States
-full_enrich_chmm<- rbind(within_chron_hyper[['ft_chmm']], chron_hyper[['ft_chmm']], cross_hyper[['ft_chmm']],
-                          within_chron_hypo[['ft_chmm']], chron_hypo[['ft_chmm']], cross_hypo[['ft_chmm']])
-
-full_enrich_chmm$annotation<- factor(full_enrich_chmm$annotation, levels = chmm_ordered)
-
-chmm_enrich_plot<- full_enric_chmm %>%
-  ggplot(aes(x=annotation, y=estimate, colour = model, alpha=padj<0.05)) +
-  geom_point(size = 1) +
-  geom_line(aes(group = model)) +
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  geom_errorbar(ymin = full_enrich$conf.low, ymax = full_enrich$conf.high, width = 0.3) +
-  scale_colour_manual(values = c("darkgoldenrod2", "steelblue2", "green4"), name = "") +
-  theme_classic(base_size = 6) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=0.5),
-        axis.line = element_line(colour = "black", linewidth = 0.5),
-        plot.margin = margin(1, 1, 1, 1, "pt"),
-        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
-        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
-  ylab("Odds Ratio") +
-  xlab("Chromatin State") +
-  scale_y_continuous(breaks = seq(0,12,2), limits = c(0, 11)) +
-  facet_wrap(vars(direction), ncol = 1)
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/full_enrich_dnam.svg", 
-       full_enrich_plot, 
-       height = 90, width = 105, units = "mm")
-
-#Repeat Elements
-full_enrich_re<- rbind(within_chron_hyper[['ft_re']], chron_hyper[['ft_re']], cross_hyper[['ft_re']],
-                         within_chron_hypo[['ft_re']], chron_hypo[['ft_re']], cross_hypo[['ft_re']])
-
-full_enrich_re$annotation<- factor(full_enrich_re$annotation, levels = re_ordered)
-
-re_enrich_plot<- full_enrich_re %>%
-  ggplot(aes(x=annotation, y=estimate, colour = model, alpha=padj<0.05)) +
-  geom_point(size = 1) +
-  geom_line(aes(group = model)) +
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  geom_errorbar(ymin = full_enrich_re$conf.low, ymax = full_enrich_re$conf.high, width = 0.3) +
-  scale_colour_manual(values = c("darkgoldenrod2", "steelblue2", "green4"), name = "") +
-  theme_classic(base_size = 6) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=0.5),
-        axis.line = element_line(colour = "black", linewidth = 0.5),
-        plot.margin = margin(1, 1, 1, 1, "pt"),
-        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
-        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
-  ylab("Odds Ratio") +
-  xlab("Repeat Element") +
-  #scale_y_continuous(breaks = seq(0,12,2), limits = c(0, 12)) +
-  facet_wrap(vars(direction), ncol = 1, scales = "free_y")
-re_enrich_plot
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/re_enrich_dnam.svg", 
-       re_enrich_plot, 
-       height = 90, width = 55, units = "mm")
-
-#Eq2 Between
+#Eq2 Between Enrichment
 eq2_m_hypo<- enrichment(pqlseq_anno, "eq2_m_signif", "Age-Hypomethylated")
 eq2_m_hyper<- enrichment(pqlseq_anno, "eq2_m_signif", "Age-Hypermethylated")
 
-eq2_m_full<- rbind(eq2_m_hyper[['ft_chmm']], eq2_m_hypo[['ft_chmm']])
-eq2_m_full<- eq2_m_full %>%
-  filter(annotation != "Promoter") %>%
-  mutate(model = "Eq.2 Btwn")
-eq2_m_full<- rbind(eq2_m_full, chron_hypo[['ft_chmm']], chron_hyper[['ft_chmm']])
 
-eq2_m_full$annotation<- factor(eq2_m_full$annotation, levels = chmm_ordered)
+#Chromatin States
+full_enrich_chmm<- rbind(within_chron_hyper[['ft_chmm']], chron_hyper[['ft_chmm']],
+                         within_chron_hypo[['ft_chmm']], chron_hypo[['ft_chmm']],
+                         eq2_m_hyper[['ft_chmm']], eq2_m_hypo[['ft_chmm']])
 
-eq2_m_enrich<- eq2_m_full %>%
-  ggplot(aes(x=annotation, y=estimate, colour = model, alpha=padj<0.05)) +
+chmm_ordered2<- factor(c("Promoter", as.character(chmm_ordered)), levels = c("Promoter", as.character(chmm_ordered)))
+
+full_enrich_chmm$annotation<- factor(full_enrich_chmm$annotation, levels = chmm_ordered2)
+
+full_enrich_chmm %>%
+  ggplot(aes(x=annotation, y=log_or, colour = model, alpha=padj<0.05)) +
   geom_point(size = 1) +
   geom_line(aes(group = model)) +
-  geom_hline(yintercept = 1, linetype = "dashed") +
-  geom_errorbar(ymin = eq2_m_full$conf.low, ymax = eq2_m_full$conf.high, width = 0.3) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_errorbar(ymin = full_enrich_chmm$log_ci.lo, ymax = full_enrich_chmm$log_ci.hi, width = 0.3) +
+  scale_colour_manual(values = c("steelblue2", "purple", 'grey30'), name = "") +
   theme_classic(base_size = 6) +
-  theme(
+  theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=0.5),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        axis.title.x = element_blank(),
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
-  ylab("Odds Ratio") +
-  xlab("CHMM") +
-  #scale_y_continuous(breaks = seq(0,12,2), limits = c(0, 12)) +
-  facet_wrap(vars(direction), ncol = 1, scales = "free_y")
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq2m_enrich_dnam.svg", 
-       eq2_m_enrich, 
-       height = 90, width = 105, units = "mm")
+  ylab("Log Odds") +
+  xlab("Chromatin State") +
+  scale_y_continuous(breaks = seq(-3,3,1)) +
+  facet_wrap(vars(direction), ncol = 1)
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/chmm_enrich_dnam.svg", 
+       height = 105, width = 105, units = "mm")
+
+#Repeat Elements
+full_enrich_re<- rbind(within_chron_hyper[['ft_re']], chron_hyper[['ft_re']],
+                       within_chron_hypo[['ft_re']], chron_hypo[['ft_re']],
+                       eq2_m_hyper[['ft_re']], eq2_m_hypo[['ft_re']])
+
+full_enrich_re$annotation<- factor(full_enrich_re$annotation, levels = re_ordered)
+
+#Promoters----------------------------------------------------------------------
+mm_genes<- rtracklayer::import('/scratch/ckelsey4/Cayo_meth/Macaca_mulatta.Mmul_10.110.chr.gtf')
+mm_genes=as.data.frame(mm_genes)
+mm_genes<- mm_genes %>%
+  filter(type == "gene")
+
+genes_to_remove<- c("Metazoa_SRP", "U6", "mml-mir-519b")
+mm_genes<- mm_genes %>%
+  dplyr::select(c(gene_id, gene_name)) %>%
+  dplyr::rename(anno = gene_id)
+pqlseq_prom2<- left_join(pqlseq_prom, mm_genes, by = "anno")
+
+# vector of model suffixes
+models <- c("chron_age", "eq2_w_age", "eq2_m_age", "eq3_age")
+
+# create a named list of results
+top10_list <- lapply(models, function(model) {
+  
+  beta_col <- paste0("beta_", model)
+  fdr_col  <- paste0("fdr_", model)
+  
+  pqlseq_prom2 %>%
+    filter(.data[[fdr_col]] < 0.05) %>%
+    filter(!gene_name %in% genes_to_remove) %>%
+    drop_na() %>%
+    arrange(desc(.data[[beta_col]])) %>%
+    dplyr::slice(c(1:10, (n() - 9):n())) %>%
+    mutate(mod = model)
+})
+
+# name the list elements
+names(top10_list)<- models
+top_10<- do.call(rbind, top10_list)
+
+mod_names<- as_labeller(c("chron_age" = "Eq.1", "eq3_age" = "Eq.3 Within"))
+
+top_10 %>%
+  filter(mod == "chron_age" | mod == "eq3_age") %>%
+  dplyr::select(beta_chron_age, beta_eq3_age, se_beta_chron_age, se_beta_eq3_age, gene_name, mod) %>%
+  dplyr::rename(se_chron_age = se_beta_chron_age, se_eq3_age = se_beta_eq3_age) %>%
+  pivot_longer(cols = c(beta_chron_age, beta_eq3_age, se_chron_age, se_eq3_age),
+               names_to = c(".value", "model"),
+               names_sep = "_") %>%
+  ggplot(aes(x=beta, y=reorder(gene_name, beta), colour = model)) +
+  geom_point(aes(size = se)) +
+  scale_size(range = c(0.05, 2)) +
+  geom_path(aes(group = gene_name), colour = "black") +
+  scale_colour_manual(values = c("steelblue2", "purple")) +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_classic(base_size = 6) +
+  theme(
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  facet_wrap(vars(mod), ncol =2, scales = "free_y", labeller = mod_names) +
+  ylab("Promoter") +
+  xlab(expression(beta))
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/top10_proms_dnam.svg", 
+       height = 75, width = 105, units = "mm")
 
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
