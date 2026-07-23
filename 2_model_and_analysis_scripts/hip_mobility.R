@@ -20,13 +20,16 @@ generate_models<- function(dat, var){
 
   coefs<- as.data.frame(rbind(summary(chron)[["coefficients"]], summary(eq2)[["coefficients"]],
                                     summary(eq3)[["coefficients"]]))
-  colnames(hip_ext_table)<- c("β", "se", "df", "t", "p", "2.5%", "97.5%")
+  #colnames(hip_ext_table)<- c("β", "se", "df", "t", "p", "2.5%", "97.5%")
   
   coefs <- round(coefs, 3)
   
-  rownames(coefs)<- c("eq1_intercept", "eq1_age", "eq1_sexM",
-                      "eq2_intercept", "eq2_age.w", "eq2_age.btwn", "eq2_sexM",
-                      "eq3_intercept", "eq3_age.w", "eq3_age.btwn", "eq3_sexM")
+  coefs$mod<- c("eq1_intercept", "eq1_age", "eq1_sexM",
+                "eq2_intercept", "eq2_age.w", "eq2_age.btwn", "eq2_sexM",
+                "eq3_intercept", "eq3_age.w", "eq3_age.btwn", "eq3_sexM")
+  
+  coefs<- coefs %>%
+    relocate(mod, .before = "Estimate")
   
   conf_ints<- as.data.frame(rbind(confint(chron), 
                                   confint(eq2),
@@ -35,6 +38,8 @@ generate_models<- function(dat, var){
   conf_ints<- conf_ints[!grepl("sig", rownames(conf_ints)),]
   
   coefs<- cbind(coefs, conf_ints)
+  
+  colnames(coefs)<- c("mod", "β", "se", "df", "t", "p", "2.5%", "97.5%")
   
   fe.chron<- predict_response(chron, "age")
   #re.chron<- predict_response(chron_mod, terms = c("age", "individual_code"), type = "random")
@@ -78,7 +83,7 @@ generate_model_plots <- function(dat, x_var, y_var, fe_chron, fe_eq3, fe_btwn) {
                   y = predicted),
               color = "purple",
               linewidth = 1) +
-    theme_classic(base_size=6) +
+    theme_classic(base_size=12) +
     theme(panel.background = element_rect(colour = "black", linewidth=1),
           axis.line = element_line(colour = "black", linewidth = 0.5),
           plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -104,24 +109,24 @@ hip_flexion<- hip_flexion %>%
   mutate(min_age = min(age))
 hip_flexion$age<- round(hip_flexion$age, 0)
 
-samples_dist_hip<- hip_flexion %>%
+hip_flexion %>%
   ggplot(aes(x=age, y=reorder(individual_code, min_age), colour=as.factor(individual_sex))) +
   geom_path(linewidth = 0.5) +
   geom_point(colour="black", size = 0.25) +
   scale_x_continuous(breaks = seq(0, 30, by=5)) +
-  scale_colour_manual(values = c("red3", "pink2"), name = "Sex") +
-  ylab("Individual") +
-  xlab("Age") +
-  theme_classic(base_size=6) +
+  coord_cartesian(xlim = c(5, 30)) +
+  scale_colour_manual(values = c("red3", "royalblue3"), name = "Sex") +
+  theme_classic(base_size=18) +
   theme(legend.position = "none", 
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         axis.text.y = element_blank(),
         axis.ticks.y=element_blank(),
-        plot.margin = margin(1, 1, 1, 1, "pt"))
+        plot.margin = margin(1, 1, 1, 1, "pt")) +
+  ylab("Individual") +
+  xlab("Age")
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/samples_dist_hip.svg", 
-         samples_dist_hip, 
          height = 85, width = 55, units = "mm")
 
 hip_flexion %>%
@@ -167,10 +172,9 @@ hip_ext_plot<- generate_model_plots(dat = hip_ext,
                                     fe_chron = hip_extension$fe.chron,
                                     fe_eq3 = hip_extension$fe.eq3,
                                     fe_btwn = hip_extension$fe.btwn)
-hip_ext_plot
 
 #Add text and axis scales to identify plot values for Illustrator
-hip_ext_plot<- hip_ext_plot +
+hip_ext_plot +
   xlab("Age") +
   ylab("Hip Extension (Deg.)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
@@ -203,14 +207,13 @@ hip_int_plot<- generate_model_plots(dat = hip_flexion,
                                         fe_btwn = hip_rotation$fe.btwn)
 
 #Add text and axis scales to identify plot values for Illustrator
-hip_int_plot<- hip_int_plot +
+hip_int_plot +
   xlab("Age") +
   ylab("Hip Internal Rotation (Deg.)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30)) +
   scale_y_continuous(breaks = seq(0, 80, 20), limits = c(0, 80))
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/hip_int_plot.svg", 
-       hip_int_plot, 
        height = 55, width = 55, units = "mm")
 
 #Body Weight--------------------------------------------------------------------
@@ -227,7 +230,7 @@ bw_plot<- generate_model_plots(dat = bw,
                                fe_eq3 = bw_mods$fe.eq3,
                                fe_btwn = bw_mods$fe.btwn)
 
-bw_plot<- bw_plot +
+bw_plot +
   xlab("Age") +
   ylab("Body Weight (lbs)") +
   scale_x_continuous(breaks = seq(5, 30, 5), limits = c(5, 30))
@@ -235,6 +238,20 @@ bw_plot<- bw_plot +
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/bw_plot.svg", 
        bw_plot, 
        height = 55, width = 55, units = "mm")
+
+#Combine model outputs from BW, Hip Ext, and Hip Internal Rot.
+all<- left_join(bw_mods[["coefs"]], hip_extension[["coefs"]], by = "mod", 
+            suffix = c("_bw", "_hip_ext"))
+
+hip_rot<- hip_rotation[["coefs"]] %>%
+  rename_with(~ paste0(.x, "_hip_rot"), -mod)
+
+all<- left_join(all, hip_rot, by = "mod")
+
+all_short<- all %>%
+  dplyr::select(c(mod, starts_with("β") | starts_with("se") | starts_with("p"))) %>%
+  filter(!str_detect(mod, "sexM"))
+write_csv(all_short, "hip_morph_out.csv", quote = "none")
 
 #Femoral Adduction--------------------------------------------------------------
 femoral_adduction<- generate_models(hip_flexion, femoral_adduction_deg)

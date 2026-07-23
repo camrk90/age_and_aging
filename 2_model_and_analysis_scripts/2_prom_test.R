@@ -66,66 +66,34 @@ if (all.equal(long_data$lid_pid, colnames(prom_cov[[runif(1, 1, 21)]]))) {
   meth<- prom_m[[SAMP]]
   
   ###################################
-  #####           Eq.1          #####
-  ###################################
-  #Eq.1-------------------------------------------------------------------------
-  #Generate model matrix
-  eq1_matrix<- model.matrix(~ age_at_sampling + individual_sex + university, data = long_data)
-    
-  vars <- c("age_at_sampling")
-  
-  eq1_model <- lapply(setNames(vars, vars), function(i) {
-    
-    eq1_phenotype<- eq1_matrix[, i]
-    eq1_covariates<- eq1_matrix[, setdiff(colnames(eq1_matrix), i)]
-    
-    run_pqlseq(eq1_phenotype, eq1_covariates)
-    
-  })
-  
-  #Save pqlseq model
-  saveRDS(eq1_model, paste("dnam_prom_eq1_model", SAMP, sep = "_"))
-  
-  ###################################
-  #####           Eq.2          #####
+  #####       Eq.3 No Uni       #####
   ###################################
   #Generate model matrix
-  eq2_matrix<- model.matrix(~ within.age + mean.age + individual_sex + university, data = long_data)
+  eq3_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + perc_unique, data = long_data)
   
-  vars <- c("within.age", "mean.age")
+  eq3_phenotype<- eq3_matrix[, "age_at_sampling"]
+  eq3_covariates<- eq3_matrix[, setdiff(colnames(eq3_matrix), "age_at_sampling")]
   
-  eq2_model <- lapply(setNames(vars, vars), function(i) {
-    
-    eq2_phenotype <- eq2_matrix[, i]
-    eq2_covariates <- eq2_matrix[, setdiff(colnames(eq2_matrix), i)]
-    
-    run_pqlseq(eq2_phenotype, eq2_covariates)
-    
-  })
+  eq3_model<- run_pqlseq(eq3_phenotype,eq3_covariates)
   
   #Save pqlseq model
-  saveRDS(eq2_model, paste("dnam_prom_eq2_model", SAMP, sep = "_"))
+  saveRDS(eq3_model, paste("eq3_no_uni", SAMP, sep = "_"))
+  
+  rm(eq3_matrix);rm(eq3_model);rm(eq3_phenotype);rm(eq3_covariates)
   
   ###################################
-  #####           Eq.3          #####
+  #####         Eq.3 Uni        #####
   ###################################
-  #Run PQLseq for eq3-----------------------------------------------------------
   #Generate model matrix
- eq3_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + university, data = long_data)
+  eq3_matrix<- model.matrix(~ age_at_sampling + mean.age + individual_sex + university, data = long_data)
   
-  vars <- c("age_at_sampling", "mean.age")
+  eq3_phenotype<- eq3_matrix[, "age_at_sampling"]
+  eq3_covariates<- eq3_matrix[, setdiff(colnames(eq3_matrix), "age_at_sampling")]
   
- eq3_model <- lapply(setNames(vars, vars), function(i) {
-    
-   eq3_phenotype<- eq3_matrix[, i]
-   eq3_covariates<- eq3_matrix[, setdiff(colnames(eq3_matrix), i)]
-    
-    run_pqlseq(eq3_phenotype,eq3_covariates)
-    
-  })
+  eq3_model<- run_pqlseq(eq3_phenotype,eq3_covariates)
   
   #Save pqlseq model
-  saveRDS(eq3_model, paste("dnam_prom_eq3_model", SAMP, sep = "_"))
+  saveRDS(eq3_model, paste("eq3_uni", SAMP, sep = "_"))
   
 } else {
   

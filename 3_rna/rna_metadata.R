@@ -113,8 +113,6 @@ base_meta %>%
   scale_x_continuous(breaks = seq(5, 30, by=5)) +
   coord_cartesian(xlim = c(5, 30)) +
   scale_colour_manual(values = c("red3", "royalblue3"), name = "Sex") +
-  ylab("Individual") +
-  xlab("Age") +
   theme_classic(base_size = 18) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),

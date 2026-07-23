@@ -62,8 +62,8 @@ kinship<- kinship[blood_metadata$lid_pid, blood_metadata$lid_pid]
 
 #Import m/cov rds------------------------------------------------------------
 # load region lists that have been filtered for 5x coverage in 90% of samples
-regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered_cs.rds")
-regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered_cs.rds")
+regions_cov<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_cov_filtered.rds")
+regions_m<- readRDS("/scratch/ckelsey4/Cayo_meth/regions_m_filtered.rds")
 
 #Filter metadata to lids in regions list
 blood_metadata<- blood_metadata[blood_metadata$lid_pid %in% colnames(regions_cov[[1]]),]
@@ -80,39 +80,76 @@ regions_m<- lapply(names(regions_m), function(x){
 
 names(regions_cov)<- 1:21 #turn all chroms into integers (X = 21)
 names(regions_m)<- 1:21 #turn all chroms into integers (X = 21)
+  
+#Separate m/cov into chromosomes based on array number--------------------------
+cov<- regions_cov[[SAMP]]
+meth<- regions_m[[SAMP]]
 
-#Check metadata lids match the lids (cols) of a random chromosome
-if (all.equal(blood_metadata$lid_pid, colnames(regions_cov[[runif(1, 1, 21)]]))) {
-  
-  #Model Vectors for lme4-------------------------------------------------------
-  cov<- regions_cov[[SAMP]]
-  meth<- regions_m[[SAMP]]
-  
-  ###################################
-  #####        Run PQLseq       #####
-  ###################################
-  #Run PQLseq-------------------------------------------------------------------
-  #Generate model matrix
-  cs_matrix<- model.matrix(~ age_at_sampling + individual_sex + university, data = blood_metadata)
-  
-  vars <- c("age_at_sampling", "individual_sexM")
-  
-  cs_model <- lapply(setNames(vars, vars), function(i) {
-    
-    cs_phenotype <- cs_matrix[, i]
-    cs_covariates <- cs_matrix[, setdiff(colnames(cs_matrix), i)]
-    
-    run_pqlseq(cs_phenotype, cs_covariates)
-    
-  })
-  
-  #Save pqlseq model
-  saveRDS(cs_model, paste("cs_pqlseq2_age", SAMP, sep = "_"))
-  
-} else {
-  
-  print("blood_metadata lids did not match cov matrix lids")
-  
-}
+###################################
+#####        Run PQLseq       #####
+###################################
+#Run PQLseq-------------------------------------------------------------------
+#Generate model matrix
+cs_matrix<- model.matrix(~ age_at_sampling + individual_sex + university, data = blood_metadata)
 
+vars <- c("age_at_sampling", "individual_sexM")
 
+cs_model<- lapply(setNames(vars, vars), function(i) {
+  
+  pheno <- cs_matrix[, i]
+  covariates <- cs_matrix[, setdiff(colnames(cs_matrix), i)]
+  
+  rr_list<- vector("list", nrow(cov))
+ # err_list<- vector("list", nrow(cov))
+  
+  for (r in 1:nrow(cov)) {
+    
+    tryCatch({
+      
+      rr<- pqlseq2(Y = meth[20:25,], x = pheno, 
+                          K = kinship, W = covariates, 
+                          lib_size = cov[20:25,], model="BMM")
+      
+      rr<- rr %>%
+        filter(converged == TRUE) %>%
+        mutate(fdr = p.adjust(pvalue, method = "fdr")) %>%
+        relocate(fdr, .after = pvalue) %>%
+        dplyr::select(-c(converged, elapsed_time))
+      
+      colnames(rr)<- c("outcome", "n", paste(names(rr[,3:length(rr)]), i, sep = "_"))
+      
+      rr$note <- NA_character_
+      
+      rr_list[[r]]<- rr
+      
+    }, error = function(e) {
+      
+      message(e$message)
+      
+      err<- as.data.frame(matrix(NA, nrow = 1, ncol = 10))
+      
+      colnames(err)<- c("outcome", "n", 
+                        paste(c("intercept", "se_intercept","beta", "se_beta", "pvalue", "fdr", "h2", "sigma2"), 
+                              i,
+                        sep = "_"))
+      
+      err$note<- e$message
+      
+      rr_list[[r]]<<- err
+      
+    })
+    
+    print(paste("Region", r, "done", sep = " "))
+    
+  } 
+  
+  # combine into data frames
+  rr_df <- dplyr::bind_rows(rr_list)
+  
+  # return both as a list
+  list(results = rr_df)
+  
+})
+
+#Save pqlseq model
+saveRDS(cs_model, paste("cs_pqlseq2_age", SAMP, sep = "_"))
