@@ -11,7 +11,7 @@ library(fgsea)
 pqlseq_anno<- readRDS("/scratch/ckelsey4/Cayo_meth/pqlseq_anno.rds")
 
 pqlseq_anno<- pqlseq_anno %>%
-  mutate(eq2_diff = abs(beta_chron_age) - abs(beta_eq2_w_age),
+  mutate(eq2_diff = abs(beta_chron_age) - abs(beta_eq2_m_age),
          eq3_diff = abs(beta_chron_age) - abs(beta_eq3_age))
 
 #Generate region list
@@ -29,13 +29,13 @@ within2<- within$eq2_diff
 names(within2) = within$unique_cpg
 
 #Enrichment for Hallmark set
-within_gsea<- fgseaSimple(pathways = func_region_list, 
+eq2_m_gsea<- fgseaSimple(pathways = func_region_list, 
                            stats = within2,
                            minSize = 5,
                            maxSize = length(within2) - 1,
                            nperm = 1000)
 
-saveRDS(within_gsea, "/scratch/ckelsey4/Cayo_meth/within_gsea.rds")
+saveRDS(eq2_m_gsea, "/scratch/ckelsey4/Cayo_meth/eq2_m_gsea.rds")
 
 #Run gsea
 eq3<- pqlseq_anno %>%

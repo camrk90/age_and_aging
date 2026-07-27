@@ -755,100 +755,95 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/intersect.svg",
 ##Import annotation files-------------------------------------------------------
 mmul_anno_list<- readRDS("/home/ckelsey4/Cayo_meth/intersect_files/mmul_intersect_list.rds")
 
-test<- lapply(mmul_anno_list, function(x){
+mmul_anno_list<- lapply(mmul_anno_list, function(x){
   
-  df<- left_join(x, age_full, by = c("region_range", "chr"))
+  df<- left_join(x, age_trunc, by = c("region_range", "chr"))
   df<- df %>% drop_na()
   df<- df %>% 
     filter(chr != "Y")
   
 })
 
-re_anno<- read_csv("/scratch/ckelsey4/Cayo_meth/re_annotations.csv")
-re_anno<- re_anno %>%
-  filter(chr != "Y")
-chmm_intersect<- read_csv("/scratch/ckelsey4/Cayo_meth/chmm_annotations.csv")
-chmm_intersect<- chmm_intersect %>%
-  filter(chr != "Y")
-promoters<- read_csv("/scratch/ckelsey4/Cayo_meth/promoters.csv")
-promoters<- promoters %>%
-  filter(chr != "Y")
-
 #Promoters----------------------------------------------------------------------
-pqlseq_prom<- left_join(promoters, age_full, by = c("region_range", "chr"))
-pqlseq_prom<- pqlseq_prom %>%
-  drop_na()
-test[["proms"]]<- test[["proms"]] %>%
-  drop_na()
-test[["proms"]]$anno_class<- "Promoter"
+#Create new promoters and genes df where 'anno' = "Promoter/Genes" not the 
+#Ensembl gene name for factor issues later
+pqlseq_proms<- mmul_anno_list[["proms"]]
+pqlseq_genes<- mmul_anno_list[["genes"]]
 
-#Create new promoter df where 'anno' = "Promoter" not the gene name for factor issues later
-pqlseq_prom2<- pqlseq_prom %>%
+mmul_anno_list[["proms"]]$anno_class<- "Promoters"
+mmul_anno_list[["proms"]]<- mmul_anno_list[["proms"]] %>% 
   mutate(anno = "Promoter")
+
+mmul_anno_list[["genes"]]$anno_class<- "Genes"
+mmul_anno_list[["genes"]]<- mmul_anno_list[["genes"]] %>% 
+  mutate(anno = "Gene Body")
+
+mmul_anno_list[["shores"]]$anno_class<- "CpG Shores"
+mmul_anno_list[["shores"]]<- mmul_anno_list[["shores"]] %>% 
+  mutate(anno = "CpG Shore")
+
+mmul_anno_list[["islands"]]$anno_class<- "CpG Islands"
+mmul_anno_list[["islands"]]<- mmul_anno_list[["islands"]] %>% 
+  mutate(anno = "CpG Islands")
 
 saveRDS(pqlseq_prom, "/home/ckelsey4/Cayo_meth/proms_eq1_eq3.rds")
 
 #CHMM---------------------------------------------------------------------------
-#Join pqlseq model and chmm 
-pqlseq_chmm<- left_join(chmm_intersect, age_trunc, by = c("region_range", "chr"))
-
-#Filter out regions with models that didn't converge resulting in NAs in the annotation join
-pqlseq_chmm<- pqlseq_chmm %>%
-  drop_na()
-
 #Set annotations as factor and reorder
-chmm_ordered<- as.factor(str_sort(unique(test[["chmm"]]$anno), numeric = TRUE))
-test[["chmm"]]$anno<- factor(test[["chmm"]]$anno, levels = rev(chmm_ordered))
+chmm_ordered<- as.factor(str_sort(unique(mmul_anno_list[["chmm"]]$anno), numeric = TRUE))
+mmul_anno_list[["chmm"]]$anno<- factor(mmul_anno_list[["chmm"]]$anno, levels = rev(chmm_ordered))
 
 #Create column of broad categories for annotations
-test[["chmm"]]$anno_class<- "TSSs"
-test[["chmm"]]$anno_class[test[["chmm"]]$anno %in% chmm_ordered[3:5]]<- "Active Tr."
-test[["chmm"]]$anno_class[test[["chmm"]]$anno %in% chmm_ordered[6:8]]<- "Enhancers"
-test[["chmm"]]$anno_class[test[["chmm"]]$anno %in% chmm_ordered[9:15]]<- "Quiescent"
+mmul_anno_list[["chmm"]]$anno_class<- "TSSs"
+mmul_anno_list[["chmm"]]$anno_class[mmul_anno_list[["chmm"]]$anno %in% chmm_ordered[3:5]]<- "Active Tr."
+mmul_anno_list[["chmm"]]$anno_class[mmul_anno_list[["chmm"]]$anno %in% chmm_ordered[6:8]]<- "Enhancers"
+mmul_anno_list[["chmm"]]$anno_class[mmul_anno_list[["chmm"]]$anno %in% chmm_ordered[9:15]]<- "Quiescent"
 
 #Set classes as factors
 class_factors<- c("TSSs", "Active Tr.", "Enhancers", "Quiescent")
-test[["chmm"]]$anno_class<- factor(test[["chmm"]]$anno_class, levels = rev(class_factors))
+mmul_anno_list[["chmm"]]$anno_class<- factor(mmul_anno_list[["chmm"]]$anno_class, levels = rev(class_factors))
 
 #REPEAT ELEMENTS----------------------------------------------------------------
 #Remove non-sensical annotations (NA, Unknown etc)
-test[["repeats"]]<- test[["repeats"]][!test[["repeats"]]$anno %in% c("Unknown", "DNA?", "LTR?", "RC?", "Unspecified",
-                                                                     "RC", "rRNA", "snRNA", "tRNA", "srpRNA", "scRNA", "Low_complexity"),]
+mmul_anno_list[["repeats"]]<- mmul_anno_list[["repeats"]][!mmul_anno_list[["repeats"]]$anno %in% 
+                                                            c("Unknown", "DNA?", "LTR?", "RC?", "Unspecified",
+                                                              "RC", "rRNA", "snRNA", "tRNA", "srpRNA", "scRNA", 
+                                                              "Low_complexity"),]
 
-test[["repeats"]]$anno_class<- "Simple Repeats"
-test[["repeats"]]$anno_class[test[["repeats"]]$anno %in% c("SINE", "LINE", "LTR", "Retroposon")]<- "TE Class I"
-test[["repeats"]]$anno_class[test[["repeats"]]$anno %in% "DNA"]<- "TE Class II"
+mmul_anno_list[["repeats"]]$anno_class<- "Simple Repeats"
+mmul_anno_list[["repeats"]]$anno_class[mmul_anno_list[["repeats"]]$anno %in% c("SINE", "LINE", "LTR", "Retroposon")]<- "TE Class I"
+mmul_anno_list[["repeats"]]$anno_class[mmul_anno_list[["repeats"]]$anno %in% "DNA"]<- "TE Class II"
 
 re_ordered<- c("Simple_repeat", "Satellite", "SINE", "LINE", "LTR", "Retroposon", "DNA")
 
-test[["repeats"]]<- test[["repeats"]] %>%
+mmul_anno_list[["repeats"]]<- mmul_anno_list[["repeats"]] %>%
   dplyr::relocate(anno_class, .after = anno)
 
-test[["repeats"]]$anno<- factor(test[["repeats"]]$anno, levels = rev(re_ordered))
+mmul_anno_list[["repeats"]]$anno<- factor(mmul_anno_list[["repeats"]]$anno, levels = rev(re_ordered))
 
 #Bind annotation dfs together---------------------------------------------------
-pqlseq_anno<- rbind(pqlseq_chmm, pqlseq_re, pqlseq_prom2)
+pqlseq_full<- bind_rows(mmul_anno_list)
 
-annos<- c("TSSs", "Active Tr.", "Enhancers", "Quiescent", "Simple Repeats",
-          "TE Class I", "TE Class II")
+annos<- c("CpG Islands", "CpG Shores", "Promoters", "Genes", "TSSs", "Active Tr.", 
+          "Enhancers", "Quiescent", "Simple Repeats", "TE Class I", "TE Class II")
 
-pqlseq_anno$anno_source<- "Repeat Elements"
-pqlseq_anno$anno_source[pqlseq_anno$anno_class == "TSSs" | pqlseq_anno$anno_class == "Active Tr." |
-                          pqlseq_anno$anno_class == "Enhancers" | pqlseq_anno$anno_class == "Quiescent" |
-                          pqlseq_anno$anno_class == "Promoter"]<- "Transcription"
+annos<- factor(annos, levels = annos)
 
-pqlseq_anno<- pqlseq_anno %>%
+pqlseq_full<- pqlseq_full %>%
+  mutate(anno_source = case_when(
+    anno_class %in% c(class_factors, "Promoters", "Cpg Shores", "Cpg Islands", "Genes") ~ "Transcription",
+    anno_class %in% c("Simple Repeats", "TE Class I", "TE Class II") ~ "Repeat Elements"
+  ))
+
+pqlseq_full<- pqlseq_full %>%
   arrange(anno_source, anno_class)
 
-#Rearrange factors to sort by type then log_or
-pqlseq_anno$anno_class<- factor(pqlseq_anno$anno_class, levels = rev(annos))
+pqlseq_full$anno_class<- factor(pqlseq_full$anno_class, levels = rev(annos))
 
-pqlseq_anno$unique_cpg<- paste(pqlseq_anno$chr, pqlseq_anno$cpg_loc, sep="_")
+pqlseq_full$unique_cpg<- paste(pqlseq_full$chr, pqlseq_full$cpg_loc, sep="_")
 
-pqlseq_anno<- pqlseq_anno %>%
+pqlseq_full<- pqlseq_full %>%
   dplyr::relocate(c(anno_class, anno_source, unique_cpg), .after=anno)
-
-rm(chmm_intersect);rm(re_anno);rm(pqlseq_prom2)
 
 #Generate a chmm factor vector that contains promoters 
 tx_ordered<- c("0_Promoter", levels(chmm_ordered))
@@ -857,45 +852,52 @@ tx_ordered[1]<- str_split_i(tx_ordered[1], "_", 2)
 tx_ordered<- factor(tx_ordered, levels = tx_ordered)
 
 #Annotation proportions
-pqlseq_anno$cross_signif<- "Non-Significant"
-pqlseq_anno$cross_signif[pqlseq_anno$fdr_cross < 0.05 & pqlseq_anno$beta_cross < 0]<- "Age-Hypomethylated"
-pqlseq_anno$cross_signif[pqlseq_anno$fdr_cross < 0.05 & pqlseq_anno$beta_cross > 0]<- "Age-Hypermethylated"
+pqlseq_full$cross_signif<- "Non-Significant"
+pqlseq_full$cross_signif[pqlseq_full$fdr_cross < 0.05 & pqlseq_full$beta_cross < 0]<- "Age-Hypomethylated"
+pqlseq_full$cross_signif[pqlseq_full$fdr_cross < 0.05 & pqlseq_full$beta_cross > 0]<- "Age-Hypermethylated"
 
-pqlseq_anno$cross_signif<- factor(pqlseq_anno$cross_signif, 
+pqlseq_full$cross_signif<- factor(pqlseq_full$cross_signif, 
                         levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-pqlseq_anno$chron_signif<- "Non-Significant"
-pqlseq_anno$chron_signif[pqlseq_anno$fdr_chron_age < 0.05 & pqlseq_anno$beta_chron_age < 0]<- "Age-Hypomethylated"
-pqlseq_anno$chron_signif[pqlseq_anno$fdr_chron_age < 0.05 & pqlseq_anno$beta_chron_age > 0]<- "Age-Hypermethylated"
+pqlseq_full$chron_signif<- "Non-Significant"
+pqlseq_full$chron_signif[pqlseq_full$fdr_chron_age < 0.05 & pqlseq_full$beta_chron_age < 0]<- "Age-Hypomethylated"
+pqlseq_full$chron_signif[pqlseq_full$fdr_chron_age < 0.05 & pqlseq_full$beta_chron_age > 0]<- "Age-Hypermethylated"
 
-pqlseq_anno$chron_signif<- factor(pqlseq_anno$chron_signif, 
+pqlseq_full$chron_signif<- factor(pqlseq_full$chron_signif, 
                                   levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-pqlseq_anno$eq2_w_signif<- "Non-Significant"
-pqlseq_anno$eq2_w_signif[pqlseq_anno$fdr_eq2_w_age < 0.05 & pqlseq_anno$beta_eq2_w_age < 0]<- "Age-Hypomethylated"
-pqlseq_anno$eq2_w_signif[pqlseq_anno$fdr_eq2_w_age < 0.05 & pqlseq_anno$beta_eq2_w_age > 0]<- "Age-Hypermethylated"
+pqlseq_full$eq2_w_signif<- "Non-Significant"
+pqlseq_full$eq2_w_signif[pqlseq_full$fdr_eq2_w_age < 0.05 & pqlseq_full$beta_eq2_w_age < 0]<- "Age-Hypomethylated"
+pqlseq_full$eq2_w_signif[pqlseq_full$fdr_eq2_w_age < 0.05 & pqlseq_full$beta_eq2_w_age > 0]<- "Age-Hypermethylated"
 
-pqlseq_anno$eq2_w_signif<- factor(pqlseq_anno$eq2_w_signif, 
+pqlseq_full$eq2_w_signif<- factor(pqlseq_full$eq2_w_signif, 
                                   levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-pqlseq_anno$eq2_m_signif<- "Non-Significant"
-pqlseq_anno$eq2_m_signif[pqlseq_anno$fdr_eq2_m_age < 0.05 & pqlseq_anno$beta_eq2_m_age < 0]<- "Age-Hypomethylated"
-pqlseq_anno$eq2_m_signif[pqlseq_anno$fdr_eq2_m_age < 0.05 & pqlseq_anno$beta_eq2_m_age > 0]<- "Age-Hypermethylated"
+pqlseq_full$eq2_m_signif<- "Non-Significant"
+pqlseq_full$eq2_m_signif[pqlseq_full$fdr_eq2_m_age < 0.05 & pqlseq_full$beta_eq2_m_age < 0]<- "Age-Hypomethylated"
+pqlseq_full$eq2_m_signif[pqlseq_full$fdr_eq2_m_age < 0.05 & pqlseq_full$beta_eq2_m_age > 0]<- "Age-Hypermethylated"
 
-pqlseq_anno$eq2_m_signif<- factor(pqlseq_anno$eq2_m_signif, 
+pqlseq_full$eq2_m_signif<- factor(pqlseq_full$eq2_m_signif, 
                                     levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-pqlseq_anno$eq3_age_signif<- "Non-Significant"
-pqlseq_anno$eq3_age_signif[pqlseq_anno$fdr_eq3_age < 0.05 & pqlseq_anno$beta_eq3_age < 0]<- "Age-Hypomethylated"
-pqlseq_anno$eq3_age_signif[pqlseq_anno$fdr_eq3_age < 0.05 & pqlseq_anno$beta_eq3_age > 0]<- "Age-Hypermethylated"
+pqlseq_full$eq3_age_signif<- "Non-Significant"
+pqlseq_full$eq3_age_signif[pqlseq_full$fdr_eq3_age < 0.05 & pqlseq_full$beta_eq3_age < 0]<- "Age-Hypomethylated"
+pqlseq_full$eq3_age_signif[pqlseq_full$fdr_eq3_age < 0.05 & pqlseq_full$beta_eq3_age > 0]<- "Age-Hypermethylated"
 
-pqlseq_anno$eq3_age_signif<- factor(pqlseq_anno$eq3_age_signif, 
+pqlseq_full$eq3_age_signif<- factor(pqlseq_full$eq3_age_signif, 
                                    levels = c("Age-Hypermethylated", "Non-Significant", "Age-Hypomethylated"))
 
-#save pqlseq_anno df to .rds for gsea script
-saveRDS(pqlseq_anno, "/scratch/ckelsey4/Cayo_meth/pqlseq_anno.rds")
+#save pqlseq_full df to .rds for gsea script
+saveRDS(pqlseq_full, "/scratch/ckelsey4/Cayo_meth/pqlseq_full.rds")
 
 #Enrichment Analyses------------------------------------------------------------
+#Subset pqlseq df to chmm and re
+pqlseq_anno<- pqlseq_full %>%
+  filter(anno_class %in% c(class_factors, "Promoters", "Simple Repeats", "TE Class I", "TE Class II"))
+
+#save pqlseq_full df to .rds for gsea script
+saveRDS(pqlseq_anno, "/scratch/ckelsey4/Cayo_meth/pqlseq_anno.rds")
+
 ##Plot annotation proportions---------------------------------------------------
 generate_proportion<- function(df, x, c1, c2, c3){
   
@@ -952,7 +954,7 @@ generate_proportion(pqlseq_anno, eq2_m_signif, "green1", "gray90", "green4")
 generate_proportion(pqlseq_anno, eq3_age_signif, "purple1", "gray90", "purple4")
 
 ##Rank Enrichment----------------------------------------------------------------
-gsea<- readRDS('/scratch/ckelsey4/Cayo_meth/within_gsea.rds')
+gsea<- readRDS('/scratch/ckelsey4/Cayo_meth/eq3_gsea.rds')
 
 gsea$type<- "Repeat Elements"
 gsea$type[gsea$pathway %in% tx_ordered]<- "Chromatin States"
@@ -961,11 +963,11 @@ gsea<- gsea %>%
   mutate(pathway = factor(pathway, levels = pathway))
 
 gsea %>%
-  #ggplot(aes(x=pathway, y=NES, colour = NES < 0, alpha=padj<0.05)) +
-  ggplot(aes(x=pathway, y=NES, fill = NES < 0)) +
-  #geom_col(aes(alpha = padj<.05)) +
-  geom_point(aes()) +
-  geom_line(aes(group = type)) +
+  ggplot(aes(x=NES, y=pathway, fill = NES < 0, alpha=padj<0.05)) +
+  #ggplot(aes(x=pathway, y=NES, fill = NES < 0)) +
+  geom_col(aes(alpha = padj<.05)) +
+  #geom_point(aes()) +
+  #geom_line(aes(group = type)) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   scale_fill_manual(values = c("purple", "steelblue2")) +
   theme_classic(base_size = 6) +
@@ -977,7 +979,7 @@ gsea %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   ylab("NES") +
   xlab("Annotation") +
-  facet_wrap(vars(type), nrow = 2, scale = "free_x")
+  facet_wrap(vars(type), nrow = 2, scale = "free_y")
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/rank_enrich_dnam.svg", 
        plot = last_plot(),
@@ -1133,41 +1135,20 @@ enrichment_uniq<- function(model_df, model_type1, model_type2, var_type1, var_ty
   return(list(ft_chmm=ft_chmm, ft_re=ft_re, c_tables=df_list))
 }
 
-#Generate col for Eq.2 vs Eq.1 signif
-pqlseq_anno$within_chron<- "Both Insignificant"
-pqlseq_anno$within_chron[pqlseq_anno$fdr_eq2_w_age < 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Both Significant"
-pqlseq_anno$within_chron[pqlseq_anno$fdr_eq2_w_age < 0.05 & pqlseq_anno$fdr_chron_age > 0.05]<- "Within Age Significant"
-pqlseq_anno$within_chron[pqlseq_anno$fdr_eq2_w_age > 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Chron Age Significant"
-
 #Generate col for Eq.3 vs Eq.1 signif
 pqlseq_anno$eq3_chron<- "Both Insignificant"
 pqlseq_anno$eq3_chron[pqlseq_anno$fdr_eq3_age < 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Both Significant"
 pqlseq_anno$eq3_chron[pqlseq_anno$fdr_eq3_age < 0.05 & pqlseq_anno$fdr_chron_age > 0.05]<- "Eq3 Age Significant"
 pqlseq_anno$eq3_chron[pqlseq_anno$fdr_eq3_age > 0.05 & pqlseq_anno$fdr_chron_age < 0.05]<- "Chron Age Significant"
 
-#Eq3-Eq.1 Enrichment
-within_chron_hypo<- enrichment_uniq(pqlseq_anno, 
+#Eq.3 unique enrichment
+eq3_uniq_hypo<- enrichment_uniq(pqlseq_anno, 
                                     "eq3_chron", "eq3_age_signif",
                                     "Eq3 Age Significant", "Age-Hypomethylated")
 
-within_chron_hyper<- enrichment_uniq(pqlseq_anno, 
+eq3_uniq_hyper<- enrichment_uniq(pqlseq_anno, 
                                      "eq3_chron", "eq3_age_signif",
                                      "Eq3 Age Significant", "Age-Hypermethylated")
-
-eq1_uniq_hypo<- enrichment_uniq(pqlseq_anno, 
-                                "eq3_chron", "chron_signif", 
-                                "Chron Age Significant", "Age-Hypomethylated")
-
-eq1_uniq_hyper<- enrichment_uniq(pqlseq_anno, 
-                                "eq3_chron", "chron_signif", 
-                                "Chron Age Significant", "Age-Hypermethylated")
-
-full_enrich_chmm<- rbind(within_chron_hyper[['ft_chmm']], eq1_uniq_hyper[['ft_chmm']],
-                         within_chron_hypo[['ft_chmm']], eq1_uniq_hypo[['ft_chmm']])
-
-chmm_ordered2<- factor(c("Promoter", as.character(chmm_ordered)), levels = c("Promoter", as.character(chmm_ordered)))
-
-full_enrich_chmm$annotation<- factor(full_enrich_chmm$annotation, levels = chmm_ordered2)
 
 #Eq.1 Enrichment
 chron_hypo<- enrichment(pqlseq_anno, "chron_signif", "Age-Hypomethylated")
@@ -1181,30 +1162,61 @@ cross_hyper<- enrichment(pqlseq_anno, "cross_signif", "Age-Hypermethylated")
 eq2_m_hypo<- enrichment(pqlseq_anno, "eq2_m_signif", "Age-Hypomethylated")
 eq2_m_hyper<- enrichment(pqlseq_anno, "eq2_m_signif", "Age-Hypermethylated")
 
-#Eq.1 Enrichment
+#Eq.3 Enrichment
 eq3_hypo<- enrichment(pqlseq_anno, "eq3_age_signif", "Age-Hypomethylated")
 eq3_hyper<- enrichment(pqlseq_anno, "eq3_age_signif", "Age-Hypermethylated")
 
-
 #Chromatin States
-full_enrich_chmm<- rbind(eq3_hyper[['ft_chmm']], chron_hyper[['ft_chmm']],
-                         eq3_hypo[['ft_chmm']], chron_hypo[['ft_chmm']],
-                         eq2_m_hyper[['ft_chmm']], eq2_m_hypo[['ft_chmm']])
+full_enrich_chmm<- rbind(eq3_uniq_hyper[['ft_chmm']], eq3_hyper[['ft_chmm']], 
+                         chron_hyper[['ft_chmm']], eq2_m_hyper[['ft_chmm']], 
+                         eq3_uniq_hypo[['ft_chmm']], eq3_hypo[['ft_chmm']], 
+                         chron_hypo[['ft_chmm']],eq2_m_hypo[['ft_chmm']])
 
 chmm_ordered2<- factor(c("Promoter", as.character(chmm_ordered)), levels = c("Promoter", as.character(chmm_ordered)))
 
 full_enrich_chmm$annotation<- factor(full_enrich_chmm$annotation, levels = chmm_ordered2)
+full_enrich_chmm$model<- factor(full_enrich_chmm$model, levels = c("chron_signif", "eq2_m_signif", "eq3_age_signif", "Eq3 Age Significant"))
 
 full_enrich_chmm %>%
+  arrange(model, direction) %>%
+  write_csv(., "chmm_enrichment.csv")
+
+full_enrich_chmm %>%
+  filter(model != "eq2_m_signif") %>%
   ggplot(aes(x=annotation, y=log_or, colour = model, alpha=padj<0.05)) +
   geom_point(size = 1) +
   geom_line(aes(group = model)) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_errorbar(ymin = full_enrich_chmm$log_ci.lo, ymax = full_enrich_chmm$log_ci.hi, width = 0.3) +
-  scale_colour_manual(values = c("steelblue2", "purple"), name = "") +
+  geom_errorbar(aes(ymin = log_ci.lo, ymax = log_ci.hi, width = 0.3)) +
+  scale_colour_manual(values = c("steelblue2", "purple", "purple4"), name = "",
+                      labels = c("Eq.1", "Eq.3 Within", "Eq.3 Unique")) +
   theme_classic(base_size = 6) +
-  theme(
-        panel.background = element_rect(colour = "black", linewidth=0.5),
+  theme(panel.background = element_rect(colour = "black", linewidth=0.5),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        axis.title.x = element_blank(),
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  ylab("Log Odds") +
+  xlab("Chromatin State") +
+  scale_y_continuous(breaks = seq(-3,3,1)) +
+  facet_wrap(vars(direction), ncol = 1)
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/chmm_enrich_dnam.svg", 
+       height = 90, width = 105, units = "mm")
+
+full_enrich_chmm %>%
+  filter(!model %in% c("Eq3 Age Significant")) %>%
+  ggplot(aes(x=annotation, y=log_or, colour = model, alpha=padj<0.05)) +
+  geom_point(size = 1) +
+  geom_line(aes(group = model)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_errorbar(aes(ymin = log_ci.lo, ymax = log_ci.hi, width = 0.3)) +
+  scale_colour_manual(values = c("steelblue2", 'grey30', "purple"), name = "",
+                      labels = c("Eq.1", "Eq.2 Between", "Eq.3 Within")) +
+  theme_classic(base_size = 6) +
+  theme(panel.background = element_rect(colour = "black", linewidth=0.5),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
@@ -1220,22 +1232,29 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/chmm_enrich_dnam.svg",
        height = 90, width = 105, units = "mm")
 
 #Repeat Elements
-full_enrich_re<- rbind(within_chron_hyper[['ft_re']], chron_hyper[['ft_re']],
-                       within_chron_hypo[['ft_re']], chron_hypo[['ft_re']],
-                       eq2_m_hyper[['ft_re']], eq2_m_hypo[['ft_re']])
+full_enrich_re<- rbind(eq3_uniq_hyper[['ft_re']], eq3_hyper[['ft_re']], 
+                       chron_hyper[['ft_re']], eq2_m_hyper[['ft_re']],
+                       eq3_uniq_hypo[['ft_re']], eq3_hypo[['ft_re']],
+                       chron_hypo[['ft_re']], eq2_m_hypo[['ft_re']])
 
 full_enrich_re$annotation<- factor(full_enrich_re$annotation, levels = re_ordered)
+full_enrich_re$model<- factor(full_enrich_re$model, levels = c("chron_signif", "eq2_m_signif", "eq3_age_signif", "Eq3 Age Significant"))
 
 full_enrich_re %>%
+  arrange(model, direction) %>%
+  write_csv(., "re_enrichment.csv")
+
+full_enrich_re %>%
+  filter(model != "eq2_m_signif") %>%
   ggplot(aes(x=annotation, y=log_or, colour = model, alpha=padj<0.05)) +
   geom_point(size = 1) +
   geom_line(aes(group = model)) +
   geom_hline(yintercept = 0, linetype = "dashed") +
-  geom_errorbar(ymin = full_enrich_re$log_ci.lo, ymax = full_enrich_re$log_ci.hi, width = 0.3) +
-  scale_colour_manual(values = c("steelblue2", "purple", 'grey30'), name = "") +
+  geom_errorbar(aes(ymin = log_ci.lo, ymax = log_ci.hi, width = 0.3)) +
+  scale_colour_manual(values = c("steelblue2", "purple", "purple4"), name = "",
+                      labels = c("Eq.1", "Eq.3 Within", "Eq.3 Unique")) +
   theme_classic(base_size = 6) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=0.5),
+  theme(panel.background = element_rect(colour = "black", linewidth=0.5),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
@@ -1244,7 +1263,31 @@ full_enrich_re %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   ylab("Log Odds") +
   xlab("Chromatin State") +
-  scale_y_continuous(breaks = seq(-4,2,1)) +
+  scale_y_continuous(breaks = seq(-3,3,1)) +
+  facet_wrap(vars(direction), ncol = 1)
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/re_enrich_dnam.svg", 
+       height = 90, width = 105, units = "mm")
+
+full_enrich_re %>%
+  filter(!model %in% c("Eq3 Age Significant")) %>%
+  ggplot(aes(x=annotation, y=log_or, colour = model, alpha=padj<0.05)) +
+  geom_point(size = 1) +
+  geom_line(aes(group = model)) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_errorbar(aes(ymin = log_ci.lo, ymax = log_ci.hi, width = 0.3)) +
+  scale_colour_manual(values = c("steelblue2", 'grey30', "purple"), name = "") +
+  theme_classic(base_size = 6) +
+  theme(panel.background = element_rect(colour = "black", linewidth=0.5),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        axis.title.x = element_blank(),
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  ylab("Log Odds") +
+  xlab("Chromatin State") +
+  scale_y_continuous(breaks = seq(-3,3,1)) +
   facet_wrap(vars(direction), ncol = 1)
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/re_enrich_dnam.svg", 
@@ -1256,14 +1299,94 @@ mm_genes=as.data.frame(mm_genes)
 mm_genes<- mm_genes %>%
   filter(type == "gene")
 
-genes_to_remove<- c("Metazoa_SRP", "U6", "mml-mir-519b")
 mm_genes<- mm_genes %>%
   dplyr::select(c(gene_id, gene_name)) %>%
   dplyr::rename(anno = gene_id)
-pqlseq_prom2<- left_join(pqlseq_prom, mm_genes, by = "anno")
+pqlseq_proms<- left_join(pqlseq_proms, mm_genes, by = "anno")
+
+genes_to_remove<- c("Metazoa_SRP", "U1", "U2", "U3", "U4", "U5", "U6", "U7", "U8", "", "Y_RNA")
+pqlseq_proms<- pqlseq_proms[!pqlseq_proms$gene_name %in% genes_to_remove, ]
+pqlseq_proms<- pqlseq_proms %>% filter(!grepl("*_rRNA", gene_name))
+pqlseq_proms<- pqlseq_proms %>% filter(!grepl("mml-mir-*", gene_name))
+
+
+#Each region maps to a single gene so collapsing the df to each unique ensembl gene name
+pqlseq_proms<- pqlseq_proms %>%
+  distinct(anno, .keep_all = T)
+
+pqlseq_proms$eq3_signif<- "Neither"
+pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age < .05 & pqlseq_proms$fdr_eq3_age > .05]<- "Eq.1 Signif."
+pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age > .05 & pqlseq_proms$fdr_eq3_age < .05]<- "Eq.3 Signif."
+pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age < .05 & pqlseq_proms$fdr_eq3_age < .05]<- "Both Signif."
+
+pqlseq_proms %>%
+  filter(fdr_chron_age < .05 | fdr_eq3_age < .05) %>%
+  ggplot(aes(beta_chron_age, beta_eq3_age)) +
+  geom_point(aes(colour = eq3_signif), alpha = 0.5) +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  geom_abline() +
+  scale_colour_manual(values = c("black", "steelblue1", "purple1")) +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  scale_y_continuous(breaks = seq(-0.15, 0.15, 0.05), limits = c(-0.15, 0.15), labels = scales::comma) +
+  scale_x_continuous(breaks = seq(-0.15, 0.15, 0.05), limits = c(-0.15, 0.15), labels = scales::comma) +
+  xlab(expression(beta["Eq.1"])) +
+  ylab(expression(beta["Eq.3"]))
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/dnam_proms_scatter.svg", 
+       height = 50, width = 50, units = "mm")
+
+pqlseq_proms %>%
+  ggplot(aes(eq3_chron_diff, fill = eq3_chron_diff < 0)) +
+  geom_density() +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  scale_fill_manual(values = c("steelblue1", "purple1")) +
+  ylab("Density") +
+  xlab(expression(abs(beta["Eq.1"]) - abs(beta["Eq.3"])))
+
+top10<- pqlseq_proms %>%
+  drop_na() %>%
+  arrange(eq3_chron_diff) %>%
+  dplyr::slice(c(1:10, (n() - 9):n()))
+
+top10 %>%
+  dplyr::select(beta_chron_age, beta_eq3_age, gene_name, eq3_chron_diff) %>%
+  pivot_longer(cols = c(beta_chron_age, beta_eq3_age),
+               names_to = c(".value", "model"),
+               names_sep = "_") %>%
+  ggplot(aes(x=beta, y=reorder(gene_name, abs(eq3_chron_diff)), colour = model)) +
+  geom_point(aes()) +
+  #scale_size(range = c(0.05, 2)) +
+  geom_path(aes(group = gene_name), colour = "black") +
+  scale_colour_manual(values = c("steelblue2", "purple")) +
+  geom_vline(xintercept=0, linetype="dashed") +
+  theme_classic(base_size = 18) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  ylab("Promoter") +
+  xlab(expression(beta))
 
 # vector of model suffixes
-models <- c("chron_age", "eq2_w_age", "eq2_m_age", "eq3_age")
+models <- c("chron_age", "eq2_m_age", "eq3_age")
 
 # create a named list of results
 top10_list <- lapply(models, function(model) {
@@ -1271,7 +1394,7 @@ top10_list <- lapply(models, function(model) {
   beta_col <- paste0("beta_", model)
   fdr_col  <- paste0("fdr_", model)
   
-  pqlseq_prom2 %>%
+  pqlseq_proms %>%
     filter(.data[[fdr_col]] < 0.05) %>%
     filter(!gene_name %in% genes_to_remove) %>%
     drop_na() %>%
@@ -1288,19 +1411,18 @@ mod_names<- as_labeller(c("chron_age" = "Eq.1", "eq3_age" = "Eq.3 Within"))
 
 top_10 %>%
   filter(mod == "chron_age" | mod == "eq3_age") %>%
-  dplyr::select(beta_chron_age, beta_eq3_age, se_beta_chron_age, se_beta_eq3_age, gene_name, mod) %>%
-  dplyr::rename(se_chron_age = se_beta_chron_age, se_eq3_age = se_beta_eq3_age) %>%
-  pivot_longer(cols = c(beta_chron_age, beta_eq3_age, se_chron_age, se_eq3_age),
+  dplyr::select(beta_chron_age, beta_eq3_age, gene_name, mod) %>%
+  pivot_longer(cols = c(beta_chron_age, beta_eq3_age),
                names_to = c(".value", "model"),
                names_sep = "_") %>%
   ggplot(aes(x=beta, y=reorder(gene_name, beta), colour = model)) +
-  geom_point(aes(size = se)) +
+  geom_point() +
   scale_size(range = c(0.05, 2)) +
   geom_path(aes(group = gene_name), colour = "black") +
   scale_colour_manual(values = c("steelblue2", "purple")) +
   geom_vline(xintercept=0, linetype="dashed") +
-  theme_classic(base_size = 18) +
-  theme(
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1311,7 +1433,49 @@ top_10 %>%
   xlab(expression(beta))
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/top10_proms_dnam.svg", 
-       height = 75, width = 105, units = "mm")
+       height = 100, width = 75, units = "mm")
+
+#Promoter GSEA------------------------------------------------------------------
+#Generate hallmark gene set
+hallmark.msigdb = msigdbr(species = "Macaca mulatta", category = "H")
+hallmark_list = split(x = hallmark.msigdb$ensembl_gene, f = hallmark.msigdb$gs_name)
+
+proms_gsea<- pqlseq_proms %>% 
+  dplyr::select(c(anno, eq3_chron_diff)) %>% 
+  arrange(desc(eq3_chron_diff))
+
+proms_gsea2<- proms_gsea$eq3_chron_diff
+names(proms_gsea2) = proms_gsea$anno
+
+#Enrichment for Hallmark set
+diff_gsea_out<- fgsea(pathways = hallmark_list, 
+                      stats = proms_gsea2,
+                      minSize = 15,
+                      maxSize = 500,
+                      eps = 0.0)
+
+diff_gsea_out$pathway<- gsub("HALLMARK_", "", diff_gsea_out$pathway)
+
+diff_gsea_out %>%
+  arrange(NES) %>%
+  dplyr::slice(c(1:10, (n() - 9):n())) %>%
+  ggplot(aes(x=NES, y=reorder(pathway, NES), colour = NES < 0)) +
+  #geom_col(aes(alpha = padj<.05)) +
+  geom_point() +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_colour_manual(values = c("steelblue2", "purple")) +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  ylab("Pathway") +
+  xlab("NES")
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/diff_gsea.svg", 
+       height = 100, width = 60, units = "mm")
 
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
