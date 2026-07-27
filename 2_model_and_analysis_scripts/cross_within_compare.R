@@ -1178,7 +1178,7 @@ full_enrich_chmm$annotation<- factor(full_enrich_chmm$annotation, levels = chmm_
 full_enrich_chmm$model<- factor(full_enrich_chmm$model, levels = c("chron_signif", "eq2_m_signif", "eq3_age_signif", "Eq3 Age Significant"))
 
 full_enrich_chmm %>%
-  arrange(model, direction) %>%
+  arrange(model, direction, annotation) %>%
   write_csv(., "chmm_enrichment.csv")
 
 full_enrich_chmm %>%
@@ -1228,7 +1228,7 @@ full_enrich_chmm %>%
   scale_y_continuous(breaks = seq(-3,3,1)) +
   facet_wrap(vars(direction), ncol = 1)
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/chmm_enrich_dnam.svg", 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/chmm_enrich_dnam_eq2b.svg", 
        height = 90, width = 105, units = "mm")
 
 #Repeat Elements
@@ -1241,7 +1241,7 @@ full_enrich_re$annotation<- factor(full_enrich_re$annotation, levels = re_ordere
 full_enrich_re$model<- factor(full_enrich_re$model, levels = c("chron_signif", "eq2_m_signif", "eq3_age_signif", "Eq3 Age Significant"))
 
 full_enrich_re %>%
-  arrange(model, direction) %>%
+  arrange(model, direction, annotation) %>%
   write_csv(., "re_enrichment.csv")
 
 full_enrich_re %>%
@@ -1276,7 +1276,8 @@ full_enrich_re %>%
   geom_line(aes(group = model)) +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_errorbar(aes(ymin = log_ci.lo, ymax = log_ci.hi, width = 0.3)) +
-  scale_colour_manual(values = c("steelblue2", 'grey30', "purple"), name = "") +
+  scale_colour_manual(values = c("steelblue2", 'grey30', "purple"), name = "",
+                      labels = c("Eq.1", "Eq.2 Between", "Eq.3 Within")) +
   theme_classic(base_size = 6) +
   theme(panel.background = element_rect(colour = "black", linewidth=0.5),
         axis.line = element_line(colour = "black", linewidth = 0.5),
@@ -1290,7 +1291,7 @@ full_enrich_re %>%
   scale_y_continuous(breaks = seq(-3,3,1)) +
   facet_wrap(vars(direction), ncol = 1)
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/re_enrich_dnam.svg", 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/re_enrich_dnam_eq2b.svg", 
        height = 90, width = 105, units = "mm")
 
 #Promoters----------------------------------------------------------------------
