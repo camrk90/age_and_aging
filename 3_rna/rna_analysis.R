@@ -7,39 +7,63 @@ library(ggrepel)
 library(fgsea)
 library(msigdbr)
 library(Biostrings)
-library(GenomicFeatures)
-library(GenomicRanges)
 library(biomaRt)
 library(ggvenn)
 library(UpSetR)
 library(lme4)
+library(limma)
+library(edgeR)
+library(EMMREML)
+library(variancePartition)
 
-load("/home/ckelsey4/rna_data/rna_analysis.RData")
+#load("/home/ckelsey4/rna_data/rna_analysis.RData")
 
 #Load data
-eq2_int<- readRDS("/home/ckelsey4/rna_data/rna_eq2_int")
-eq3_int<- readRDS("/home/ckelsey4/rna_data/rna_eq3_int")
-chron_int<- readRDS("/home/ckelsey4/rna_data/rna_chron_int")
+eq1<- readRDS("/home/ckelsey4/rna_data/rna_eq1")
+eq2<- readRDS("/home/ckelsey4/rna_data/rna_eq2")
+eq3<- readRDS("/home/ckelsey4/rna_data/rna_eq3")
+base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
+rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_9Jan26.rds")
 
 #Make simplified outcome df
-rna_int<- as.data.frame(cbind(chron_int$outcome, chron_int$beta_trapped_age, chron_int$pvalue_trapped_age,
-                             eq2_int$beta_within_age, eq2_int$pvalue_within_age,
-                             eq2_int$beta_mean_age, eq2_int$pvalue_mean_age,
-                             eq3_int$beta_trapped_age, eq3_int$pvalue_trapped_age,
-                             eq3_int$beta_mean_age, eq3_int$pvalue_mean_age))
+eq1_int<- eq1[["df"]]
+eq2_int<- eq2[["df"]]
+eq3_int<- eq3[["df"]]
+rna_int<- as.data.frame(cbind(eq1_int$outcome, eq1_int$beta_trapped_age, 
+                              eq1_int$pvalue_trapped_age, eq1_int$se_trapped_age,
+                              eq2_int$beta_within_age, eq2_int$pvalue_within_age,
+                              eq2_int$se_within_age, eq2_int$beta_mean_age, 
+                              eq2_int$pvalue_mean_age, eq2_int$se_mean_age,
+                              eq3_int$beta_trapped_age, eq3_int$pvalue_trapped_age,
+                              eq3_int$se_trapped_age, eq3_int$beta_mean_age, 
+                              eq3_int$pvalue_mean_age, eq3_int$se_mean_age))
 
-c_names<- c("outcome", "beta_chron_age", "pval_chron_age",
-                     "beta_eq2_w", "pval_eq2_w",
-                     "beta_eq2_m", "pval_eq2_m",
-                     "beta_eq3_age", "pval_eq3_age",
-                     "beta_eq3_m", "pval_eq3_m")
+c_names<- c("outcome", "beta_chron_age", "pval_chron_age", "se_chron_age",
+            "beta_eq2_w", "pval_eq2_w", "se_eq2_w",
+            "beta_eq2_m", "pval_eq2_m", "se_eq2_m",
+            "beta_eq3_age", "pval_eq3_age", "se_eq3_age",
+            "beta_eq3_m", "pval_eq3_m", "se_eq3_m")
+
 colnames(rna_int)<- c_names
 
 rna_int<- rna_int %>%
-  mutate(across(2:11, as.numeric)) %>%
-  mutate(eq2_eq3_diff = abs(beta_eq2_w) - abs(beta_eq3_age))
+  mutate(across(2:16, as.numeric))
+
+#Variance Partition
+plotVarPart(eq1[["vp"]])
+plotVarPart(eq2[["vp"]])
+plotVarPart(eq3[["vp"]])
 
 #PCA----------------------------------------------------------------------------
+rna_counts<- rna_counts[, base_meta$Sample_ID]
+rna_norm<- voom(calcNormFactors(DGEList(counts=rna_counts)), plot=FALSE)
+rna_norm<- rna_norm[["E"]]
+colnames(rna_norm)<- colnames(rna_counts)
+rownames(rna_norm)<- rownames(rna_counts)
+rna_norm<- t(rna_norm)
+
+rna_norm<- rna_norm[rownames(rna_norm) %in% base_meta$Sample_ID,]
+
 rna_pca<- prcomp(rna_norm, center = TRUE, scale. = TRUE)
 
 pcs<- as.data.frame(rna_pca$x)
@@ -49,20 +73,8 @@ summary(rna_pca)$importance[2, ]
 
 pcs<- cbind(pcs[1:5], base_meta)
 
-pcs %>% ggplot(aes(x = pid, y = age_at_sampling)) +
-  geom_boxplot()
-
-pcs %>% ggplot(aes(x = prep_year, y = age_at_sampling)) +
-  geom_boxplot()
-
-pcs %>%
-  ggplot(aes(within_age, PC1)) +
-  geom_point() +
-  geom_smooth(method = "lm")
-
 pc.matrix<- model.matrix(~ PC1 + PC2 + trapped_age + within_age + mean_age + sex + Seq_batch + 
-                           p_reads_trimmed + p_uniq_mapped + p_duplicates + p_gene_counts + 
-                           cd3_cd4_proportion + cd3_cd8_proportion + cd3_cd16_proportion + cd20_proportion,
+                           p_reads_trimmed + p_uniq_mapped + p_duplicates + p_gene_counts,
                          data = pcs)
 pc.matrix %>% 
   cor(use="pairwise.complete.obs") %>%
@@ -80,7 +92,7 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
     mutate(diff = abs({{var2}}) - abs({{var1}}),
            ratio = abs({{var2}})/abs({{var1}}))
   
-  print(paste("Median", v2, "/", v1, "=", median(df$ratio), sep = " "))
+  print(paste("Median", v2, "-", v1, "=", median(df$diff), sep = " "))
   correlation<- cor(df %>% pull({{var1}}), df %>% pull({{var2}}))
   
   print(paste("The correlation between", 
@@ -131,12 +143,11 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
   }
 }
 
-within_chron_plot_rna<- compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
-                                     beta_chron_age, beta_eq3_age, "scatter")
-
-within_chron_plot_rna +
-  scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, 
-                        name = "") +
+#Eq.1 Age vs Eq.3 Age
+compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
+             beta_chron_age, beta_eq3_age, "scatter") +
+  scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+                        midpoint = 0, name = "") +
   xlab(expression(beta["Eq.1"])) +
   ylab(expression(beta["Eq.3"]))  +
   xlim(-1.0, 1.0) +
@@ -145,69 +156,121 @@ within_chron_plot_rna +
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_scatter_rna.svg",
        height = 50, width = 50, units = "mm")
 
-within_chron_hist_rna<- compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
-                                     beta_chron_age, beta_eq3_age,"hist")
-within_chron_hist_rna +
-  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
+compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
+             beta_chron_age, beta_eq3_age,"hist") +
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+                       midpoint = 0, name = "") +
   xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
   ylab("Count")
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_hist_rna.svg", 
-       within_chron_hist_rna, 
        height = 50, width = 50, units = "mm")
 
-compare_plot(rna_int, pval_eq2_w, pval_eq2_m,
-             beta_eq2_w, beta_eq2_m, "scatter")
-
-compare_plot(rna_int, pval_eq2_, pval_eq3_age,
-             beta_chron_age, beta_eq3_age,
-             "purple", "steelblue2", 
-             "Chron Age", "Eq3. Age", "hist")
-
+#Eq.2 Age Within vs Eq.3 Age
 compare_plot(rna_int, pval_eq2_w, pval_eq3_age,
-             beta_eq2_w, beta_eq3_age,
-             "purple", "green4", "scatter")
+             beta_eq2_w, beta_eq3_age, "scatter") +
+  scale_fill_gradient2(low = "green4", mid = "grey70", high = "purple", 
+                       midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.2"])) +
+  ylab(expression(beta["Eq.3"]))  +
+  xlim(-1.0, 1.0) +
+  ylim(-1.0, 1.0) 
 
-compare_plot(rna_int, pval_eq2_w, pval_eq3_age,
-             beta_eq2_w, beta_eq3_age,
-             "purple", "green4","hist")
+compare_plot(rna_int, pval_eq2_w, pval_eq2_m, 
+             beta_eq2_w, beta_eq3_age,"scatter") +
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+                       midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
+  ylab("Count")
+
+#Eq.1 Age vs Eq.2 Between Age
+compare_plot(rna_int, pval_chron_age, pval_eq2_m, 
+             beta_chron_age, beta_eq2_m, "scatter") +
+  scale_colour_gradient2(low = "steelblue2", mid = "grey70", high = "grey30", 
+                         midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.2 Between"])) +
+  ylab(expression(beta["Eq.3"]))  +
+  xlim(-0.1, 0.1) +
+  ylim(-0.1, 0.1) 
 
 #Counts for significant genes
-generate_counts<- function(rna) {
+count_signif_regions<- function(x) {
   
-  age.chron.count<- nrow(rna[rna$pval_chron_age < 0.05,])
-  age.w.count<- nrow(rna[rna$pval_eq2_w < 0.05,])
-  age.eq3.count<- nrow(rna[rna$pval_eq3_age < 0.05,])
-  age.m.count<- nrow(rna[rna$pval_eq2_m < 0.05,])
-  total<- data.frame(count = c(age.w.count, age.eq3.count, age.chron.count, age.m.count),
-                      predictor = as.factor(c('Eq.2 W.', 'Eq.3', 'Eq.1', 'Eq.2 B.')))
+  #Generate count, proportion, and percentage of significant genes
+  df<- x %>%
+    dplyr::select(starts_with("pval_"))
   
-  total$predictor<- factor(total$predictor, levels = c('Eq.3', 'Eq.2 W.','Eq.1', "Eq.2 B."))
-  total<- total %>%
-    mutate(perc_signif = count/nrow(rna))
+  vars<- gsub("pval_", "", colnames(df))
   
-  return(total)
+  counts <- colSums(df < 0.05, na.rm = TRUE)
+  
+  counts<- data.frame(predictor = vars,
+                      count = counts)
+  
+  counts<- counts %>%
+    arrange(counts) %>%
+    mutate(predictor = factor(predictor, levels = predictor))
+  
+  counts<- counts %>%
+    mutate(proportion_signif = count/nrow(df),
+           perc_signif = proportion_signif*100)
+  
+  #Generate comparison with Eq.1 Age beta values
+  test<- lapply(x[,startsWith(colnames(x), "beta_")], function(y){
+    
+    dfr<- cor.test(y, rna_int$beta_chron_age)["estimate"]
+    dfm<- median(y - rna_int$beta_chron_age)
+    
+    dd<- data.frame(correlation = dfr, median_diff = dfm)
+    return(dd)
+  })
+  
+  test<- as.data.frame(do.call(rbind, test))
+  
+  test$predictor<- gsub("beta_", "", rownames(test))
+  
+  #Generate significance comparison
+  signif<- lapply(x[,startsWith(colnames(x), "pval_")], function(y){
+    
+    shared<- x %>% filter(y < .05 | pval_chron_age < .05) %>% nrow()
+    
+  })
+  
+  signif<- as.data.frame(do.call(rbind, signif))
+  colnames(signif)<- "shared_genes"
+  
+  signif$predictor<- gsub("pval_", "", rownames(signif))
+  
+  #Combine outputs
+  counts<- left_join(counts, test, by = "predictor")
+  counts<- left_join(counts, signif, by = "predictor")
+  
+  #Plot counts
+  counts_plot<- counts %>%
+    filter(!predictor == "eq3_m") %>%
+    ggplot(aes(reorder(predictor, count), count, fill = predictor)) +
+    geom_bar(stat = 'identity') +
+    geom_text(label=counts$count[counts$predictor != "eq3_m"], vjust=-0.25, size = 3) +
+    theme_classic(base_size = 18) +
+    theme(legend.position = "none",
+          panel.background = element_rect(colour = "black", linewidth=1),
+          axis.line = element_line(colour = "black", linewidth = 0.5),
+          axis.title.x = element_blank(),
+          plot.margin = margin(1, 1, 1, 1, "pt")) +
+    ylab("# Significant Regions")
+  
+  return(list(plot = counts_plot, df = counts))
   
 }
 
-int_counts<- generate_counts(rna_int)
-slope_counts<- generate_counts(rna_slopes)
+counts<- count_signif_regions(rna_int)
+counts[["plot"]] +
+  scale_fill_manual(values = c("steelblue2", "grey30", 'green4', "purple")) +
+  scale_x_discrete(labels = c("chron_age" = "Eq.1", "eq2_w" = "Eq.2 Within", 
+                              "eq2_m" = "Eq.2 Btwn", "eq3_age" = "Eq.3 Within"))
 
-int_counts %>%
-  ggplot(aes(predictor, count, fill = predictor)) +
-  geom_bar(stat = 'identity') +
-  geom_text(label=int_counts$count, vjust=-0.25, size=3) +
-  theme_classic(base_size=18) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=1),
-        axis.line = element_line(colour = "black", linewidth = 0.5),
-        plot.margin = margin(1, 1, 1, 1, "pt")) +
-  xlab("Model") +
-  ylab("# Significant DEGs") +
-  scale_fill_manual(values = c("purple", 'green4', 'steelblue2', 'grey30'))
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/signif_counts_rna.svg", 
-       height = 50, width = 50, units = "mm")
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/signif_counts.svg",
+       height = 65, width = 65, units = "mm")
 
 rna_int %>%
   dplyr::select(c(beta_eq3_age, beta_eq2_w, beta_chron_age, beta_eq2_m)) %>%
@@ -232,32 +295,8 @@ rna_int %>%
   xlab("Model") +
   ylab("Beta")
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/beta_dist_rna.svg", 
-       beta_dist_rna, 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/beta_dist_rna.svg",
        height = 50, width = 50, units = "mm")
-
-## Significant regions Venn diagram
-chron.age<- rna_int$outcome[rna_int$pval_chron_age < 0.05]
-age.w<- rna_int$outcome[rna_int$pval_eq2_w < 0.05]
-eq2.btwn<- rna_int$outcome[rna_int$pval_eq2_m < 0.05]
-
-venn_list<- list(chron.age, age.w, eq2.btwn)
-names(venn_list)<- c("chron.age", "age.w", "age.btwn")
-
-ggvenn(venn_list,
-       text_size = 8,
-       show_percentage = F)
-
-venn_all<- list(cross.age, chron.age, age.w, eq3)
-names(venn_all)<- c("cross.age", "chron.age", "age.w", "eq3")
-
-upset(fromList(venn_list), order.by = "freq", 
-      text.scale = c(2, 2, 2, 1, 2, 1.5), 
-      line.size = 1, point.size = 2)
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/n_samples.svg", 
-       n_samples, 
-       height = 16, width = 24, units = "mm")
 
 #Plot top genes-----------------------------------------------------------------
 #Collect all macaque genes
@@ -274,9 +313,9 @@ mm_genes2<- mm_genes[mm_genes$anno %in% rna_genes2, ]
 mm_genes2 <- mm_genes2 %>%
   mutate(gene_name = ifelse(gene_name == "", anno, gene_name))
 
-rna_int2<- rna_int
-
 rna_int$outcome[match(mm_genes2$anno, rna_int$outcome)]<- mm_genes2$gene_name
+
+rm(rna_genes);rm(rna_genes2)
 
 top20<- rna_int %>%
   arrange(desc(beta_chron_age))

@@ -3,6 +3,10 @@
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=ckelsey4@asu.edu
 #SBATCH --mem=20G
+#SBATCH --array=1-2
+
+SAMP <- Sys.getenv("SLURM_ARRAY_TASK_ID")
+SAMP <- as.integer(SAMP)
 
 library(tidyverse)
 library(lme4)
@@ -10,47 +14,19 @@ library(limma)
 library(edgeR)
 library(EMMREML)
 
-#Load data
+#Load data----------------------------------------------------------------------
 base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
-cell_counts<- readRDS("/scratch/ckelsey4/Cayo_meth/cell_counts/lymphocyte_proportions.rds")
 rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_9Jan26.rds")
 rna_kin<- readRDS("/home/ckelsey4/rna_data/rna_kin_matrix.rds")
 
-#Normalize RNA Count Data-------------------------------------------------------
 base_meta<- base_meta %>%
   arrange(Sample_ID) %>%
   mutate(y = 1)
 
-cell_counts<- cell_counts %>% rename(animal_ID = monkey_id)
-cell_counts<- cell_counts %>% rename(trapping_ID = trapping_id)
-
-base_meta<- left_join(base_meta, cell_counts, by = c("animal_ID", "trapping_ID"))
-
-base_meta<- base_meta %>%
-  drop_na()
-
-base_meta<- base_meta %>%
-  distinct(trapping_ID, .keep_all = T)
-
-base_meta<- base_meta %>%
-  group_by(animal_ID) %>%
-  mutate(mean_age = mean(trapped_age)) %>%
-  mutate(n = n()) %>%
-  ungroup() %>%
-  arrange(trapping_ID)
-
-library(ggplot2)
-
-base_meta %>%
-  distinct(animal_ID, .keep_all = T) %>%
-  ggplot(aes(n)) + 
-  geom_bar()
-
-hist(base_meta$trapped_age)
-
-#Run EMMA for EQ3---------------------------------------------------------------
-run_emma<- function(df, cell_counts){
-
+#Generate model functions-------------------------------------------------------
+#emmaEQ3
+run_emma<- function(df, model){
+  
   rna_counts<- rna_counts[, df$Sample_ID]
   
   #Generate normalized counts
@@ -68,23 +44,17 @@ run_emma<- function(df, cell_counts){
   
   rna_norm<- rna_norm[rownames(rna_norm) %in% df$Sample_ID,]
   
-  if (cell_counts == T) {
+  if (model == "eq1") {
     
     # Create model matrix
-    mat <- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + 
-                          cd3_cd8_proportion + cd3_cd16_proportion + cd20_proportion, data = df)
-    re_eq <- "y ~ trapped_age + mean_age + sex + p_gene_counts + cd3_cd4_proportion + 
-                          cd3_cd8_proportion + cd3_cd16_proportion + cd20_proportion + (1|animal_ID)"
+    mat <- model.matrix(~ trapped_age + sex + p_gene_counts, data = df)
+    re_eq <- "y ~ trapped_age + sex + p_gene_counts + (1|animal_ID)"
     
-    print(colnames(mat))
-    
-  } else {
+  } else if (model == "eq3") {
     
     # Create model matrix
     mat <- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts, data = df)
     re_eq <- "y ~ trapped_age + mean_age + sex + p_gene_counts + (1|animal_ID)"
-    
-    print(colnames(mat))
     
   }
   
@@ -123,15 +93,9 @@ run_emma<- function(df, cell_counts){
   return(df)
 }
 
-rna_cell_counts<- run_emma(base_meta, cell_counts = T)
-saveRDS(rna_cell_counts, "rna_cell_counts.rds")
-
-rna_no_cell_counts<- run_emma(base_meta, cell_counts = F)
-saveRDS(rna_no_cell_counts, "rna_no_cell_counts.rds")
-
-#Rune LME4----------------------------------------------------------------------
-run_lme4<- function(df, cell_counts){
-
+#lme4
+run_lme4<- function(df, model){
+  
   df<- base_meta
   rna_counts<- rna_counts[, df$Sample_ID]
   
@@ -149,10 +113,10 @@ run_lme4<- function(df, cell_counts){
   }
   
   rna_norm<- as.data.frame(rna_norm[rownames(rna_norm) %in% df$Sample_ID,])
-
+  
   results_list <- vector("list", ncol(rna_norm))
   
-  if (cell_counts == T) {
+  if (model == "eq1") {
     
     for (i in 1:ncol(rna_norm)) {
       
@@ -160,8 +124,7 @@ run_lme4<- function(df, cell_counts){
       
       res<- tryCatch({
         
-        rfx<- lmerTest::lmer(gene ~ trapped_age + mean_age + sex + p_gene_counts + cd3_cd4_proportion + 
-                             cd3_cd8_proportion + cd3_cd16_proportion + cd20_proportion + (1|animal_ID), 
+        rfx<- lmerTest::lmer(gene ~ trapped_age + sex + p_gene_counts + (1|animal_ID), 
                              data = df2)
         
         rfx_sum<- summary(rfx)
@@ -170,7 +133,7 @@ run_lme4<- function(df, cell_counts){
         colnames(cfs)<- c("estimate", "se", "df", "tval", "pval", "term")
         
         rfx_row<- pivot_wider(cfs,names_from = term,
-                               values_from = c(estimate, se, df, tval, pval, term))
+                              values_from = c(estimate, se, df, tval, pval, term))
         
         if(length(rfx@optinfo[["conv"]][["lme4"]]) != 0){
           rfx_row$note<- rfx@optinfo[["conv"]][["lme4"]][["messages"]][[1]]
@@ -211,11 +174,9 @@ run_lme4<- function(df, cell_counts){
       
       results_list[[i]]<- res
       
-      #print(paste(i, "of", ncol(rna_norm), "done"))
-      
     }
     
-  } else {
+  } else if (model == "eq3") {
     
     for (i in 1:ncol(rna_norm)) {
       
@@ -273,8 +234,6 @@ run_lme4<- function(df, cell_counts){
       
       results_list[[i]]<- res
       
-      #print(paste(i, "of", ncol(rna_norm), "done"))
-    
     }
     
   }
@@ -290,11 +249,17 @@ run_lme4<- function(df, cell_counts){
   return(dd)
 }
 
-lm_cells<- suppressMessages(run_lme4(base_meta, cell_counts = T))
-saveRDS(lm_cells, "/home/ckelsey4/age_and_aging/models_out/rna_lm_cell_counts.rds")
+#Run models---------------------------------------------------------------------
+params<- c("eq1", "eq3")
 
-lm_no_cells<- suppressMessages(run_lme4(base_meta, cell_counts = F))
-saveRDS(lm_no_cells, "/home/ckelsey4/age_and_aging/models_out/rna_lm_no_cell_counts.rds")
+model_name<- params[SAMP]
+
+result_emma<- run_emma(df = base_meta, model = model_name)
+saveRDS(result_emma, paste("/home/ckelsey4/rna_data/rna_emma", model_name, sep = "_"))
+
+result_lme4<- run_lme4(df = base_meta, model = model_name)
+saveRDS(result_lme4, paste("/home/ckelsey4/rna_data/rna_lme4", model_name, sep = "_"))
+
 
 
 
