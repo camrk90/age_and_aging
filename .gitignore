@@ -2,3 +2,4 @@
 slurm-*
 models_out
 .positai
+local_data

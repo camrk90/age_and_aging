@@ -17,13 +17,18 @@ library(EMMREML)
 library(variancePartition)
 
 #load("/home/ckelsey4/rna_data/rna_analysis.RData")
+#Use for local
+parent_dir<- paste0(getwd(), "/local_data/")
+
+#Use for remote (SOL)
+parent_dir<- "/home/ckelsey4/"
 
 #Load data
-eq1<- readRDS("/home/ckelsey4/rna_data/rna_eq1")
-eq2<- readRDS("/home/ckelsey4/rna_data/rna_eq2")
-eq3<- readRDS("/home/ckelsey4/rna_data/rna_eq3")
-base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
-rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_9Jan26.rds")
+eq1<- readRDS(paste0(parent_dir, "rna_eq1"))
+eq2<- readRDS(paste0(parent_dir, "rna_eq2"))
+eq3<- readRDS(paste0(parent_dir, "rna_eq3"))
+base_meta<- read.table(paste0(parent_dir, "base_meta.txt"))
+rna_counts<- readRDS(paste0(parent_dir, "Cayo_PBMC_longLPS_counts_9Jan26.rds"))
 
 #Make simplified outcome df
 eq1_int<- eq1[["df"]]
@@ -81,119 +86,7 @@ pc.matrix %>%
   ggcorrplot(show.diag=FALSE, type="lower", lab=TRUE, lab_size=2)
 
 # Plot Model Outcomes ----------------------------------------------------------
-#Effect sizes
-compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
-  
-  v1<-deparse(substitute(var1))
-  v2<-deparse(substitute(var2))
-  
-  df<- df %>%
-    filter({{fdr1}} < .05 | {{fdr2}} < .05) %>%
-    mutate(diff = abs({{var2}}) - abs({{var1}}),
-           ratio = abs({{var2}})/abs({{var1}}))
-  
-  print(paste("Median", v2, "-", v1, "=", median(df$diff), sep = " "))
-  correlation<- cor(df %>% pull({{var1}}), df %>% pull({{var2}}))
-  
-  print(paste("The correlation between", 
-              v1, "and", 
-              v2, "=", 
-              correlation,
-              sep = " "))
-  
-  print(paste("Total # of shared significant genes = ", nrow(df)))
-  print(paste("Total # of genes where", v1, ">", v2, "=", nrow(df[df$ratio < 1,]), sep = " "))
-  
-  if (plot_type == "scatter"){
-    
-    df %>%
-      ggplot(aes({{var1}}, {{var2}}, colour = diff)) +
-      geom_point(size = 1, alpha = 0.8) +
-      geom_abline() +
-      geom_smooth(method = "lm", linewidth = 0.5) +
-      geom_vline(xintercept=0, linetype="dashed") +
-      geom_hline(yintercept=0, linetype="dashed") +
-      theme_classic(base_size = 6) +
-      theme(legend.position = "none") +
-      theme(panel.background = element_rect(colour = "black", linewidth=1),
-            axis.line = element_line(colour = "black", linewidth = 0.5),
-            plot.margin = margin(1, 1, 1, 1, "pt"),
-            aspect.ratio = 1,
-            panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-            panel.grid.minor = element_line(color = "grey98", linewidth = 0.5))
-    
-  } else if (plot_type == "hist") {
-    
-    df %>%
-      ggplot(aes(diff, fill = after_stat(x))) +
-      geom_histogram(bins = 50) +
-      geom_vline(xintercept=0, linetype="dashed") +
-      geom_vline(xintercept=median(df$diff), linetype="dashed", colour = 'red') +
-      theme_classic(base_size = 6) +
-      theme(legend.position = "none") +
-            #legend.key.width = unit(1, 'mm'), 
-            #legend.key.height = unit(5, 'mm')) +
-      theme(panel.background = element_rect(colour = "black", linewidth=1),
-            axis.line = element_line(colour = "black", linewidth = 0.5),
-            plot.margin = margin(1, 1, 1, 1, "pt"),
-            aspect.ratio = 1,
-            panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-            panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) 
-    
-  }
-}
-
-#Eq.1 Age vs Eq.3 Age
-compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
-             beta_chron_age, beta_eq3_age, "scatter") +
-  scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
-                        midpoint = 0, name = "") +
-  xlab(expression(beta["Eq.1"])) +
-  ylab(expression(beta["Eq.3"]))  +
-  xlim(-1.0, 1.0) +
-  ylim(-1.0, 1.0) 
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_scatter_rna.svg",
-       height = 50, width = 50, units = "mm")
-
-compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
-             beta_chron_age, beta_eq3_age,"hist") +
-  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
-                       midpoint = 0, name = "") +
-  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
-  ylab("Count")
-
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_hist_rna.svg", 
-       height = 50, width = 50, units = "mm")
-
-#Eq.2 Age Within vs Eq.3 Age
-compare_plot(rna_int, pval_eq2_w, pval_eq3_age,
-             beta_eq2_w, beta_eq3_age, "scatter") +
-  scale_fill_gradient2(low = "green4", mid = "grey70", high = "purple", 
-                       midpoint = 0, name = "") +
-  xlab(expression(beta["Eq.2"])) +
-  ylab(expression(beta["Eq.3"]))  +
-  xlim(-1.0, 1.0) +
-  ylim(-1.0, 1.0) 
-
-compare_plot(rna_int, pval_eq2_w, pval_eq2_m, 
-             beta_eq2_w, beta_eq3_age,"scatter") +
-  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
-                       midpoint = 0, name = "") +
-  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
-  ylab("Count")
-
-#Eq.1 Age vs Eq.2 Between Age
-compare_plot(rna_int, pval_chron_age, pval_eq2_m, 
-             beta_chron_age, beta_eq2_m, "scatter") +
-  scale_colour_gradient2(low = "steelblue2", mid = "grey70", high = "grey30", 
-                         midpoint = 0, name = "") +
-  xlab(expression(beta["Eq.2 Between"])) +
-  ylab(expression(beta["Eq.3"]))  +
-  xlim(-0.1, 0.1) +
-  ylim(-0.1, 0.1) 
-
-#Counts for significant genes
+### Counts for significant genes------------------------------------------------
 count_signif_regions<- function(x) {
   
   #Generate count, proportion, and percentage of significant genes
@@ -247,11 +140,11 @@ count_signif_regions<- function(x) {
   
   #Plot counts
   counts_plot<- counts %>%
-    filter(!predictor == "eq3_m") %>%
+    filter(!predictor %in% c("eq2_w", "eq3_m")) %>%
     ggplot(aes(reorder(predictor, count), count, fill = predictor)) +
     geom_bar(stat = 'identity') +
-    geom_text(label=counts$count[counts$predictor != "eq3_m"], vjust=-0.25, size = 3) +
-    theme_classic(base_size = 18) +
+    geom_text(label=counts$count[!counts$predictor %in% c("eq2_w", "eq3_m")], vjust=-0.25, size = 3) +
+    theme_classic(base_size = 6) +
     theme(legend.position = "none",
           panel.background = element_rect(colour = "black", linewidth=1),
           axis.line = element_line(colour = "black", linewidth = 0.5),
@@ -265,38 +158,147 @@ count_signif_regions<- function(x) {
 
 counts<- count_signif_regions(rna_int)
 counts[["plot"]] +
-  scale_fill_manual(values = c("steelblue2", "grey30", 'green4', "purple")) +
-  scale_x_discrete(labels = c("chron_age" = "Eq.1", "eq2_w" = "Eq.2 Within", 
+  scale_fill_manual(values = c("steelblue2", "grey30", "purple")) +
+  scale_x_discrete(labels = c("chron_age" = "Eq.1", 
                               "eq2_m" = "Eq.2 Btwn", "eq3_age" = "Eq.3 Within"))
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/signif_counts.svg",
        height = 65, width = 65, units = "mm")
 
+### Effect sizes----------------------------------------------------------------
+# Plot distribution of effect sizes for models
+## Eq2 within is removed, x-axis is limited to 0+/-0.5, 201 Eq.3 genes are lost
 rna_int %>%
   dplyr::select(c(beta_eq3_age, beta_eq2_w, beta_chron_age, beta_eq2_m)) %>%
   pivot_longer(cols = c(beta_eq3_age, beta_eq2_w, beta_chron_age, beta_eq2_m),
                values_to = 'beta',
                names_to = 'var') %>%
-  mutate(var = factor(var, levels = rev(c("beta_eq2_m", "beta_chron_age",
-                                          "beta_eq2_w", "beta_eq3_age")))) %>%
-  ggplot(aes(var, beta, fill=var)) +
-  geom_violin() +
-  geom_boxplot(width = 0.05, fill = "white", outlier.size = 0.25) +
-  geom_hline(yintercept = 0, linetype = 'dashed') +
-  scale_fill_manual(values = c("purple", 'green4', 'steelblue2', 'grey30')) +
-  theme_classic(base_size=18) +
+  mutate(var = factor(var, levels = c("beta_eq2_m", "beta_chron_age",
+                                      "beta_eq2_w", "beta_eq3_age"))) %>% 
+  filter(var %in% c("beta_chron_age", "beta_eq2_m", "beta_eq3_age")) %>%
+  ggplot(aes(beta, fill=var)) +
+  #geom_violin() +
+  #geom_boxplot(width = 0.05, fill = "white", outlier.size = 0.25) +
+  geom_density(alpha = 0.8) +
+  geom_vline(xintercept = 0, linetype = 'dashed', colour = "red") +
+  scale_fill_manual(values = rev(c("purple",'steelblue2', 'grey30'))) +
+  theme_classic(base_size=6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt")) +
-  scale_x_discrete(labels = c('Eq.3', 'Eq.2 W.','Eq.1', "Eq.2 B.")) +
-  xlab("Model") +
-  ylab("Beta")
+  #scale_x_discrete(labels = c('Eq.3', 'Eq.2 W.','Eq.1', "Eq.2 B.")) +
+  xlim(-0.5, 0.5) +
+  xlab(expression(beta)) +
+  ylab("Density")
 
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/beta_dist_rna.svg",
        height = 50, width = 50, units = "mm")
+
+#Generate plot function
+compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
+  
+  v1<-deparse(substitute(var1))
+  v2<-deparse(substitute(var2))
+  
+  df<- df %>%
+    filter({{fdr1}} < .05 | {{fdr2}} < .05) %>%
+    mutate(diff = abs({{var2}}) - abs({{var1}}),
+           ratio = abs({{var2}})/abs({{var1}}))
+  
+  if (plot_type == "scatter"){
+    
+    df %>%
+      ggplot(aes({{var1}}, {{var2}}, colour = diff)) +
+      geom_point(size = 1, alpha = 0.8) +
+      geom_abline() +
+      geom_smooth(method = "lm", linewidth = 0.5) +
+      geom_vline(xintercept=0, linetype="dashed") +
+      geom_hline(yintercept=0, linetype="dashed") +
+      theme_classic(base_size = 6) +
+      theme(legend.position = "none") +
+      theme(panel.background = element_rect(colour = "black", linewidth=1),
+            axis.line = element_line(colour = "black", linewidth = 0.5),
+            plot.margin = margin(1, 1, 1, 1, "pt"),
+            aspect.ratio = 1,
+            panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey98", linewidth = 0.5))
+    
+  } else if (plot_type == "hist") {
+    
+    df %>%
+      ggplot(aes(diff, fill = after_stat(x))) +
+      geom_histogram(bins = 50) +
+      geom_vline(xintercept=0, linetype="dashed") +
+      geom_vline(xintercept=median(df$diff), linetype="dashed", colour = 'red') +
+      theme_classic(base_size = 6) +
+      theme(legend.position = "none") +
+            #legend.key.width = unit(1, 'mm'), 
+            #legend.key.height = unit(5, 'mm')) +
+      theme(panel.background = element_rect(colour = "black", linewidth=1),
+            axis.line = element_line(colour = "black", linewidth = 0.5),
+            plot.margin = margin(1, 1, 1, 1, "pt"),
+            aspect.ratio = 1,
+            panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+            panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) 
+    
+  }
+}
+
+#Eq.2 Age Within vs Eq.3 Age
+compare_plot(rna_int, pval_eq2_w, pval_eq3_age,
+             beta_eq2_w, beta_eq3_age, "scatter") +
+  scale_fill_gradient2(low = "green4", mid = "grey70", high = "purple", 
+                       midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.2"])) +
+  ylab(expression(beta["Eq.3"]))  +
+  xlim(-1.0, 1.0) +
+  ylim(-1.0, 1.0) 
+
+# Eq.1 Age vs Eq.3 Age
+## Scatterplot
+compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
+             beta_chron_age, beta_eq3_age, "scatter") +
+  scale_color_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+                        midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.1"])) +
+  ylab(expression(beta["Eq.3"]))  +
+  xlim(-1.0, 1.0) +
+  ylim(-1.0, 1.0)
+
+ggsave(paste0(parent_dir, "plots", "within_chron_scatter_rna.svg"),
+       height = 50, width = 50, units = "mm")
+
+## Histogram
+compare_plot(rna_int, pval_chron_age, pval_eq3_age, 
+             beta_chron_age, beta_eq3_age,"hist") +
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+                       midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
+  ylab("Count")
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_hist_rna.svg", 
+       height = 50, width = 50, units = "mm")
+
+# Eq.2 Within vs Eq.2 Between
+compare_plot(rna_int, pval_eq2_w, pval_eq2_m, 
+             beta_eq2_w, beta_eq3_age,"scatter") +
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+                       midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
+  ylab("Count")
+
+# Eq.1 Age vs Eq.2 Between Age
+compare_plot(rna_int, pval_chron_age, pval_eq2_m, 
+             beta_chron_age, beta_eq2_m, "scatter") +
+  scale_colour_gradient2(low = "steelblue2", mid = "grey70", high = "grey30", 
+                         midpoint = 0, name = "") +
+  xlab(expression(beta["Eq.2 Between"])) +
+  ylab(expression(beta["Eq.3"]))  +
+  xlim(-0.1, 0.1) +
+  ylim(-0.1, 0.1) 
 
 #Plot top genes-----------------------------------------------------------------
 #Collect all macaque genes
