@@ -13,7 +13,7 @@ library(lme4)
 library(limma)
 library(edgeR)
 library(EMMREML)
-library(variancePartition)
+library(sva)
 
 #Load data
 base_meta<- read.table("/home/ckelsey4/rna_data/base_meta.txt")
@@ -42,29 +42,46 @@ if (all.equal(base_meta$Sample_ID, colnames(rna_counts)) == T) {
 
 rna_norm<- rna_norm[rownames(rna_norm) %in% base_meta$Sample_ID,]
 
+#Generate surrogate variables
+# Create model matrix
+mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = base_meta)
+mat0<- model.matrix(~ mean_age + sex + p_gene_counts + p_uniq_mapped, data = base_meta)
+
+svobj = sva(t(rna_norm),mat,mat0)
+SVs<-as.data.frame(svobj$sv)[1:5]
+colnames(SVs)<- paste0("SV", 1:ncol(SVs))
+base_meta<-cbind(base_meta, SVs)
+
+rm(mat);rm(mat0)
+
 #Run EMMA for EQ3---------------------------------------------------------------
 run_emma<- function(meta, model){
   
   if (model == "eq1") {
     
     # Create model matrix
-    mat<- model.matrix(~ trapped_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
-    re_eq<- "y ~ trapped_age + sex + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
-    vp_form<- ~ trapped_age + (1|sex) + p_gene_counts + p_uniq_mapped
+    #mat<- model.matrix(~ trapped_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
+    mat<- model.matrix(~ trapped_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5,
+                       data = meta)
+    re_eq<- "y ~ trapped_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5 + (1|animal_ID)"
     
   } else if (model == "eq2") {
     
     # Create model matrix
-    mat<- model.matrix(~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
-    re_eq<- "y ~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
-    vp_form<- ~ within_age + mean_age + (1|sex) + p_gene_counts + p_uniq_mapped
+    #mat<- model.matrix(~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
+    mat<- model.matrix(~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped + 
+                         SV1 + SV2 + SV3 + SV4 + SV5,
+                       data = meta)
+    re_eq<- "y ~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5 + (1|animal_ID)"
     
   } else if (model == "eq3") {
     
     # Create model matrix
-    mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
-    re_eq<- "y ~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
-    vp_form<- ~ trapped_age + mean_age + (1|sex) + p_gene_counts + p_uniq_mapped
+    #mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
+    mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped + 
+                         SV1 + SV2 + SV3 + SV4 + SV5,
+                       data = meta)
+    re_eq<- "y ~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5 + (1|animal_ID)"
     
   }
   
@@ -103,11 +120,7 @@ run_emma<- function(meta, model){
     
   }
   
-  #Run variance partition
-  vp<- fitExtractVarPartModel(t(rna_norm), vp_form, meta)
-  vp<- sortCols(vp)
-  
-  return(list(df=df, vp=vp))
+  return(df)
 }
 
 params<- c("eq1", "eq2", "eq3")
@@ -116,4 +129,4 @@ model_name<- params[SAMP]
 
 result<- run_emma(meta = base_meta, model = model_name)
 
-saveRDS(result, paste("/home/ckelsey4/rna_data/rna", model_name, sep = "_"))
+saveRDS(result, paste("/home/ckelsey4/rna_data/rna", model_name, "sv", sep = "_"))

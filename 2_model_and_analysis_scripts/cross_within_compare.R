@@ -148,8 +148,8 @@ age_full$within_chron[age_full$fdr_eq2_w_age < 0.05 & age_full$fdr_chron_age > 0
 age_full$within_chron[age_full$fdr_eq2_w_age > 0.05 & age_full$fdr_chron_age < 0.05]<- "Chron Age Significant"
 
 age_full<- age_full %>%
-  mutate(within_chron_diff = abs(beta_chron_age) - abs(beta_eq2_w_age),
-         eq3_chron_diff = abs(beta_chron_age) - abs(beta_eq3_age),
+  mutate(within_chron_diff = abs(beta_eq2_w_age) - abs(beta_chron_age),
+         eq3_chron_diff = abs(beta_eq3_age) - abs(beta_chron_age),
          within_chron_ratio = abs(beta_eq2_w_age)/abs(beta_chron_age),
          eq3_chron_ratio = abs(beta_eq3_age)/abs(beta_chron_age))
 
@@ -1310,6 +1310,11 @@ pqlseq_proms<- pqlseq_proms[!pqlseq_proms$gene_name %in% genes_to_remove, ]
 pqlseq_proms<- pqlseq_proms %>% filter(!grepl("*_rRNA", gene_name))
 pqlseq_proms<- pqlseq_proms %>% filter(!grepl("mml-mir-*", gene_name))
 
+pqlseq_proms<- pqlseq_proms %>%
+  mutate(within_chron_diff = abs(beta_eq2_w_age) - abs(beta_chron_age),
+         eq3_chron_diff = abs(beta_eq3_age) - abs(beta_chron_age),
+         within_chron_ratio = abs(beta_eq2_w_age)/abs(beta_chron_age),
+         eq3_chron_ratio = abs(beta_eq3_age)/abs(beta_chron_age))
 
 #Each region maps to a single gene so collapsing the df to each unique ensembl gene name
 pqlseq_proms<- pqlseq_proms %>%
@@ -1330,7 +1335,7 @@ pqlseq_proms %>%
   geom_abline() +
   scale_colour_manual(values = c("black", "steelblue1", "purple1")) +
   theme_classic(base_size = 6) +
-  theme(legend.position = "none",
+  theme(
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1346,10 +1351,10 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/dnam_proms_scatter.svg",
        height = 50, width = 50, units = "mm")
 
 pqlseq_proms %>%
-  ggplot(aes(eq3_chron_diff, fill = eq3_chron_diff < 0)) +
+  ggplot(aes(eq3_chron_diff, fill = eq3_chron_diff > 0)) +
   geom_density() +
   theme_classic(base_size = 6) +
-  theme(legend.position = "none",
+  theme(
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1358,7 +1363,27 @@ pqlseq_proms %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   scale_fill_manual(values = c("steelblue1", "purple1")) +
   ylab("Density") +
-  xlab(expression(abs(beta["Eq.1"]) - abs(beta["Eq.3"])))
+  xlab(expression(abs(beta["Eq.3"]) - abs(beta["Eq.1"])))
+
+pqlseq_proms %>%
+  ggplot(aes(eq3_chron_diff, fill = after_stat(x))) +
+  geom_histogram(bins = 50) +
+  geom_vline(xintercept=0, linetype="dashed") +
+  geom_vline(xintercept=median(pqlseq_proms$eq3_chron_diff), linetype="dashed", colour = 'red') +
+  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  xlab(expression(beta[abs(Eq.3) - abs(Eq.1)])) +
+  ylab("Count")
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/dnam_proms_hist.svg", 
+       height = 50, width = 50, units = "mm")
 
 top10<- pqlseq_proms %>%
   drop_na() %>%
@@ -1376,7 +1401,7 @@ top10 %>%
   geom_path(aes(group = gene_name), colour = "black") +
   scale_colour_manual(values = c("steelblue2", "purple")) +
   geom_vline(xintercept=0, linetype="dashed") +
-  theme_classic(base_size = 18) +
+  theme_classic(base_size = 6) +
   theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
@@ -1385,6 +1410,9 @@ top10 %>%
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   ylab("Promoter") +
   xlab(expression(beta))
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/top20_prom_dnam_diffs.svg", 
+       height = 100, width = 75, units = "mm")
 
 # vector of model suffixes
 models <- c("chron_age", "eq2_m_age", "eq3_age")

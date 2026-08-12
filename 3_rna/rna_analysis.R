@@ -16,17 +16,18 @@ library(edgeR)
 library(EMMREML)
 library(variancePartition)
 
-#load("/home/ckelsey4/rna_data/rna_analysis.RData")
 #Use for local
 parent_dir<- paste0(getwd(), "/local_data/")
 
 #Use for remote (SOL)
 parent_dir<- "/home/ckelsey4/"
 
+load(paste0(parent_dir, "rna_data/rna_analysis.RData"))
+
 #Load data
-eq1<- readRDS(paste0(parent_dir, "rna_eq1"))
-eq2<- readRDS(paste0(parent_dir, "rna_eq2"))
-eq3<- readRDS(paste0(parent_dir, "rna_eq3"))
+eq1_int<- readRDS(paste0(parent_dir, "/rna_data/rna_eq1_sv"))
+eq2_int<- readRDS(paste0(parent_dir, "/rna_data/rna_eq2_sv"))
+eq3_int<- readRDS(paste0(parent_dir, "/rna_data/rna_eq3_sv"))
 base_meta<- read.table(paste0(parent_dir, "base_meta.txt"))
 rna_counts<- readRDS(paste0(parent_dir, "Cayo_PBMC_longLPS_counts_9Jan26.rds"))
 
@@ -74,11 +75,11 @@ rna_pca<- prcomp(rna_norm, center = TRUE, scale. = TRUE)
 pcs<- as.data.frame(rna_pca$x)
 
 #Check which pca's explain the most variance
-summary(rna_pca)$importance[2, ]
+summary(rna_pca)$importance[, ]
 
 pcs<- cbind(pcs[1:5], base_meta)
 
-pc.matrix<- model.matrix(~ PC1 + PC2 + trapped_age + within_age + mean_age + sex + Seq_batch + 
+pc.matrix<- model.matrix(~ PC1 + PC2 + PC3 + PC4 + PC5 + trapped_age + within_age + mean_age + sex + Seq_batch + 
                            p_reads_trimmed + p_uniq_mapped + p_duplicates + p_gene_counts,
                          data = pcs)
 pc.matrix %>% 
@@ -111,7 +112,7 @@ count_signif_regions<- function(x) {
   #Generate comparison with Eq.1 Age beta values
   test<- lapply(x[,startsWith(colnames(x), "beta_")], function(y){
     
-    dfr<- cor.test(y, rna_int$beta_chron_age)["estimate"]
+    dfr<- cor.test(y, rna_int$beta_chron_age)$estimate
     dfm<- median(y - rna_int$beta_chron_age)
     
     dd<- data.frame(correlation = dfr, median_diff = dfm)
@@ -130,7 +131,7 @@ count_signif_regions<- function(x) {
   })
   
   signif<- as.data.frame(do.call(rbind, signif))
-  colnames(signif)<- "shared_genes"
+  colnames(signif)<- "genes_shared_with_eq1"
   
   signif$predictor<- gsub("pval_", "", rownames(signif))
   
@@ -211,7 +212,7 @@ compare_plot<- function(df, fdr1, fdr2, var1, var2, plot_type) {
   if (plot_type == "scatter"){
     
     df %>%
-      ggplot(aes({{var1}}, {{var2}}, colour = diff)) +
+      ggplot(aes(x={{var1}}, y={{var2}}, colour = diff)) +
       geom_point(size = 1, alpha = 0.8) +
       geom_abline() +
       geom_smooth(method = "lm", linewidth = 0.5) +
@@ -265,10 +266,10 @@ compare_plot(rna_int, pval_chron_age, pval_eq3_age,
                         midpoint = 0, name = "") +
   xlab(expression(beta["Eq.1"])) +
   ylab(expression(beta["Eq.3"]))  +
-  xlim(-1.0, 1.0) +
-  ylim(-1.0, 1.0)
+  xlim(-0.75, 0.75) +
+  ylim(-0.75, 0.75)
 
-ggsave(paste0(parent_dir, "plots", "within_chron_scatter_rna.svg"),
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_scatter_rna.svg",
        height = 50, width = 50, units = "mm")
 
 ## Histogram
@@ -284,11 +285,13 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/within_chron_hist_rna.svg",
 
 # Eq.2 Within vs Eq.2 Between
 compare_plot(rna_int, pval_eq2_w, pval_eq2_m, 
-             beta_eq2_w, beta_eq3_age,"scatter") +
-  scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", 
+             beta_eq2_w, beta_eq2_m,"scatter") +
+  scale_colour_gradient2(low = "green4", mid = "grey70", high = "grey30", 
                        midpoint = 0, name = "") +
-  xlab(expression(beta["Eq.3"] - beta["Eq.1"])) +
-  ylab("Count")
+  xlab(expression(beta["Eq.2 W"])) +
+  ylab(expression(beta["Eq.2 B"])) +
+  xlim(-0.5, 0.5) +
+  ylim(-0.5, 0.5)
 
 # Eq.1 Age vs Eq.2 Between Age
 compare_plot(rna_int, pval_chron_age, pval_eq2_m, 
@@ -298,11 +301,11 @@ compare_plot(rna_int, pval_chron_age, pval_eq2_m,
   xlab(expression(beta["Eq.2 Between"])) +
   ylab(expression(beta["Eq.3"]))  +
   xlim(-0.1, 0.1) +
-  ylim(-0.1, 0.1) 
+  ylim(-0.1, 0.1)
 
 #Plot top genes-----------------------------------------------------------------
 #Collect all macaque genes
-mm_mart<- useEnsembl(biomart="genes", dataset="mmulatta_gene_ensembl", mirror = 'useast')
+mm_mart<- useEnsembl(biomart="genes", dataset="mmulatta_gene_ensembl")
 mm_genes<- getBM(attributes = c("ensembl_gene_id", "external_gene_name"),
                  mart = mm_mart)
 colnames(mm_genes)<- c("anno", "gene_name")
@@ -319,13 +322,15 @@ rna_int$outcome[match(mm_genes2$anno, rna_int$outcome)]<- mm_genes2$gene_name
 
 rm(rna_genes);rm(rna_genes2)
 
-top20<- rna_int %>%
-  arrange(desc(beta_chron_age))
+chron_top20<- rna_int %>%
+  filter(!grepl("ENSMMUG", outcome)) %>%
+  arrange(desc(beta_chron_age)) %>%
+  dplyr::slice(c(1:10, (n() - 9):n()))
 
-top20<- top20[c(1:10, (nrow(top20)-9):nrow(top20)), ]
-
-nrow(rna_int[rna_int$beta_chron_age<0,])/nrow(rna_int)
-nrow(rna_int[rna_int$beta_chron_age>0,])
+eq3_top20<- rna_int %>%
+  filter(!grepl("ENSMMUG", outcome)) %>%
+  arrange(desc(beta_eq3_age)) %>%
+  dplyr::slice(c(1:10, (n() - 9):n()))
 
 rna_int %>%
   ggplot(aes(beta_chron_age, -log10(pval_chron_age), colour = -log10(pval_chron_age) < -log10(0.05))) +
@@ -354,9 +359,6 @@ geom_text_repel(data = top20,
                 box.padding = 0.3,
                 point.padding = 0.2,
                 show.legend = FALSE)
-
-nrow(rna_int[rna_int$beta_eq2_w<0,])/nrow(rna_int)
-nrow(rna_int[rna_int$beta_eq2_w>0,])
 
 rna_int %>%
   ggplot(aes(beta_eq3_age, -log10(pval_eq3_age), colour = -log10(pval_eq3_age) < -log10(0.05))) +
@@ -414,10 +416,10 @@ eq3_volcano_m<- rna_int %>%
         aspect.ratio = 1) +
   xlab("Beta Eq.3 Age-Between") +
   ylab("-log10(P-value)")
+
 ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq3_m_volcano_rna.svg", 
        eq3_volcano_m, 
        height = 50, width = 50, units = "mm")
-
 
 #GSEA---------------------------------------------------------------------------
 #Generate function
@@ -451,15 +453,17 @@ hallmark_list = split(x = hallmark.msigdb$gene_symbol, f = hallmark.msigdb$gs_na
 
 chron_gsea<- run_gsea(outcome, beta_chron_age, rna_int, hallmark_list)
 chron_gsea<- chron_gsea %>%
-  mutate(pathway = gsub("_", " ", pathway))
+  mutate(pathway = gsub("_", " ", pathway),
+         model = "Eq.1")
 
 chron_gsea %>%
+  dplyr::slice(c(1:10, (n() - 9):n())) %>%
   filter(abs(NES) > 1) %>%
   ggplot(aes(x=reorder(pathway, NES), y=NES)) +
   #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black") +
-  geom_point(aes(alpha=padj<0.05, size = size), colour = "steelblue2") +
-  theme_classic(base_size = 12) +
-  theme(legend.position = "none",
+  geom_point(aes(size = padj, alpha = padj < .05), colour = 'steelblue2') +
+  theme_classic(base_size = 6) +
+  theme(
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -473,44 +477,51 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/gsea_chron.svg",
        height = 85, width = 85, units = "mm")
 
 eq3_gsea<- run_gsea(outcome, beta_eq3_age, rna_int, hallmark_list)
+eq3_gsea<- eq3_gsea %>%
+  mutate(pathway = gsub("_", " ", pathway),
+         model = "Eq.3")
+full_gsea<- rbind(chron_gsea[c(1:10, nrow() - 9:nrow()),], 
+                  eq3_gsea[c(1:10, n() - 9:n()),])
 
-eq3_gsea %>%
-  filter(abs(NES) > 1) %>%
-  ggplot(aes(x=reorder(pathway, NES), y=NES)) +
-  #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black" , fill = 'purple') +
-  geom_point(aes(alpha=padj<0.05, size = size), colour = 'purple') +
-  theme_classic(base_size = 12) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=1),
-        axis.line = element_line(colour = "black", linewidth = 0.5),
-        plot.margin = margin(1, 1, 1, 1, "pt"),
-        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+full_gsea %>%
+  arrange(NES) %>%
+  #dplyr::slice(c(1:15, (n() - 14):n())) %>%
+  ggplot(aes(x=reorder(pathway, NES), y=NES, colour = model)) +
+  #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black") +
+  geom_point(aes(size = padj, alpha = padj < .05)) +
+  theme_classic(base_size = 6) +
+  theme(
+    panel.background = element_rect(colour = "black", linewidth=1),
+    axis.line = element_line(colour = "black", linewidth = 0.5),
+    plot.margin = margin(1, 1, 1, 1, "pt"),
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+    panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   ylab("NES") +
   xlab("Hallmark Gene Set") +
   coord_flip()
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/gsea_eq3.svg", 
-       gsea_eq3_plot, 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/gsea_eq3.svg",
        height = 85, width = 85, units = "mm")
 
 eq2_m_gsea<- run_gsea(outcome, beta_eq2_m, rna_int, hallmark_list)
 
 eq2_m_gsea %>%
+  dplyr::slice(c(1:10, (n() - 9):n())) %>%
   filter(abs(NES) > 1) %>%
   ggplot(aes(x=reorder(pathway, NES), y=NES)) +
-  #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black", fill = "grey30") +
-  geom_point(aes(alpha=padj<0.05, size = size), colour = "grey30") +
+  #geom_col(aes(alpha=padj<0.05), position = position_dodge(0.5), colour="black") +
+  geom_point(aes(size = padj, alpha = padj < .05), colour = 'grey30') +
   theme_classic(base_size = 12) +
-  theme(legend.position = "none",
-        panel.background = element_rect(colour = "black", linewidth=1),
-        axis.line = element_line(colour = "black", linewidth = 0.5),
-        plot.margin = margin(1, 1, 1, 1, "pt"),
-        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
-        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  theme(
+    panel.background = element_rect(colour = "black", linewidth=1),
+    axis.line = element_line(colour = "black", linewidth = 0.5),
+    plot.margin = margin(1, 1, 1, 1, "pt"),
+    panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+    panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   ylab("NES") +
   xlab("Hallmark Gene Set") +
   coord_flip()
+
 
 eq2_m_gsea %>%
   ggplot(aes(x=reorder(pathway, NES), y=NES, fill = padj > .05)) +
@@ -522,12 +533,12 @@ eq2_m_gsea %>%
   xlab("Hallmark Gene Set") +
   coord_flip()
 
-full_gsea<- inner_join(chron_gsea[,1:6], eq2_gsea[,1:6], suffix = c("_eq1", "_eq2_w"), by = "pathway")
+full_gsea<- inner_join(chron_gsea[,1:6], eq3_gsea[,1:6], suffix = c("_eq1", "_eq3_w"), by = "pathway")
 full_gsea<- inner_join(full_gsea, eq2_m_gsea[,1:6], by = "pathway")
 colnames(full_gsea)[12:16] <- c(paste(colnames(full_gsea)[12:16], "_eq2_m", sep = ""))
 
 full_gsea %>%
-  ggplot(aes(NES_eq2_m, NES_eq1, shape = padj_eq1 < .05, colour = padj_eq2_w < .05)) +
+  ggplot(aes(NES_eq3_w, NES_eq1, shape = padj_eq1 < .05, colour = padj_eq3_w < .05)) +
   geom_point(size =3) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_hline(yintercept = 0, linetype = "dashed") +
