@@ -15,6 +15,7 @@ library(msigdbr)
 library(broom)
 
 load("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
+load("~/Documents/smack_lab/cayo_data/cross_within_compare.RData")
 
 #Define import function
 import_pqlseq<- function(x, y){
@@ -1328,14 +1329,14 @@ pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age < .05 & pqlseq_proms$fdr_eq3_
 pqlseq_proms %>%
   filter(fdr_chron_age < .05 | fdr_eq3_age < .05) %>%
   ggplot(aes(beta_chron_age, beta_eq3_age)) +
-  geom_point(aes(colour = eq3_signif), alpha = 0.5) +
+  geom_point(aes(colour = eq3_signif)) +
   geom_smooth(method = "lm") +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_vline(xintercept = 0, linetype = "dashed") +
   geom_abline() +
   scale_colour_manual(values = c("black", "steelblue1", "purple1")) +
   theme_classic(base_size = 6) +
-  theme(
+  theme(legend.position = "top",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1347,14 +1348,14 @@ pqlseq_proms %>%
   xlab(expression(beta["Eq.1"])) +
   ylab(expression(beta["Eq.3"]))
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/dnam_proms_scatter.svg", 
+ggsave("~/Documents/smack_lab/age_aging_plots/dnam_proms_scatter.svg", 
        height = 50, width = 50, units = "mm")
 
 pqlseq_proms %>%
   ggplot(aes(eq3_chron_diff, fill = eq3_chron_diff > 0)) +
   geom_density() +
   theme_classic(base_size = 6) +
-  theme(
+  theme(legend.position = "top",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1372,7 +1373,9 @@ pqlseq_proms %>%
   geom_vline(xintercept=median(pqlseq_proms$eq3_chron_diff), linetype="dashed", colour = 'red') +
   scale_fill_gradient2(low = "steelblue2", mid = "grey70", high = "purple", midpoint = 0, name = "") +
   theme_classic(base_size = 6) +
-  theme(legend.position = "none") +
+  theme(legend.key.width = unit(10, 'mm'), 
+        legend.key.height = unit(2, 'mm'),
+        legend.position = "top") +
   theme(panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1382,7 +1385,7 @@ pqlseq_proms %>%
   xlab(expression(beta[abs(Eq.3) - abs(Eq.1)])) +
   ylab("Count")
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/dnam_proms_hist.svg", 
+ggsave("~/Documents/smack_lab/age_aging_plots/dnam_proms_hist.svg", 
        height = 50, width = 50, units = "mm")
 
 top10<- pqlseq_proms %>%
@@ -1411,8 +1414,8 @@ top10 %>%
   ylab("Promoter") +
   xlab(expression(beta))
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/top20_prom_dnam_diffs.svg", 
-       height = 100, width = 75, units = "mm")
+ggsave("~/Documents/smack_lab/age_aging_plots/top20_prom_dnam_diffs.svg", 
+       height = 100, width = 50, units = "mm")
 
 # vector of model suffixes
 models <- c("chron_age", "eq2_m_age", "eq3_age")
@@ -1461,8 +1464,8 @@ top_10 %>%
   ylab("Promoter") +
   xlab(expression(beta))
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/top10_proms_dnam.svg", 
-       height = 100, width = 75, units = "mm")
+ggsave("~/Documents/smack_lab/age_aging_plots/top10_proms_dnam.svg", 
+       height = 100, width = 50, units = "mm")
 
 #Promoter GSEA------------------------------------------------------------------
 #Generate hallmark gene set
@@ -1477,6 +1480,8 @@ proms_gsea2<- proms_gsea$eq3_chron_diff
 names(proms_gsea2) = proms_gsea$anno
 
 #Enrichment for Hallmark set
+set.seed(666)
+
 diff_gsea_out<- fgsea(pathways = hallmark_list, 
                       stats = proms_gsea2,
                       minSize = 15,
@@ -1490,11 +1495,11 @@ diff_gsea_out %>%
   dplyr::slice(c(1:10, (n() - 9):n())) %>%
   ggplot(aes(x=NES, y=reorder(pathway, NES), colour = NES < 0)) +
   #geom_col(aes(alpha = padj<.05)) +
-  geom_point() +
+  geom_point(aes(shape = padj < .10)) +
   geom_vline(xintercept = 0, linetype = "dashed") +
   scale_colour_manual(values = c("steelblue2", "purple")) +
   theme_classic(base_size = 6) +
-  theme(legend.position = "none",
+  theme(legend.position = "top",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1503,8 +1508,60 @@ diff_gsea_out %>%
   ylab("Pathway") +
   xlab("NES")
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/diff_gsea.svg", 
-       height = 100, width = 60, units = "mm")
+ggsave("~/Documents/smack_lab/age_aging_plots/diff_gsea.svg", 
+       height = 100, width = 75, units = "mm")
+
+#RNAxDNAm-----------------------------------------------------------------------
+rna_int<- left_join(rna_int, mm_genes, by = "gene_name")
+rna_dnam<- inner_join(pqlseq_proms, rna_int, by = "anno", 
+                      suffix = c("_dnam", "_rna"))
+
+rna_dnam %>%
+  ggplot(aes(beta_chron_age_dnam, beta_chron_age_rna)) +
+  geom_point(aes(alpha = 0.3), size = 0.1) +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  #scale_colour_manual(values = c("steelblue2", "steelblue4")) +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  #scale_y_continuous(breaks = seq(-1.0, 1.0, 0.5), limits = c(-1.0, 1.0)) +
+  #scale_x_continuous(breaks = seq(-0.2, 0.2, 0.1), limits = c(-0.2, 0.2)) +
+  xlab(expression(beta["DNAm"])) +
+  ylab(expression(beta["GE"]))
+
+rna_dnam %>%
+  mutate(signif = ifelse(pval_eq3_age < .20 & fdr_eq3_age < .20, "Y", "N")) %>%
+  ggplot(aes(beta_eq3_age_dnam, beta_eq3_age_rna)) +
+  geom_point(aes(alpha = 0.3, colour = signif), size = 0.1) +
+  geom_smooth(method = "lm") +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  scale_colour_manual(values = c("purple", "purple4")) +
+  theme_classic(base_size = 6) +
+  #theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  #scale_y_continuous(breaks = seq(-1.0, 1.0, 0.5), limits = c(-1.0, 1.0)) +
+  #scale_x_continuous(breaks = seq(-0.2, 0.2, 0.1), limits = c(-0.2, 0.2)) +
+  xlab(expression(beta["DNAm"])) +
+  ylab(expression(beta["GE"]))
+  
+
+cor.test(rna_dnam$beta_eq3_age_dnam, rna_dnam$beta_eq3_age_rna)
+cor.test(rna_dnam$beta_chron_age_dnam, rna_dnam$beta_chron_age_rna)
+
+
 
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")

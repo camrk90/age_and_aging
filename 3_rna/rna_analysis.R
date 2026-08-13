@@ -25,16 +25,16 @@ parent_dir<- "/home/ckelsey4/"
 load(paste0(parent_dir, "rna_data/rna_analysis.RData"))
 
 #Load data
-eq1_int<- readRDS(paste0(parent_dir, "/rna_data/rna_eq1_sv"))
-eq2_int<- readRDS(paste0(parent_dir, "/rna_data/rna_eq2_sv"))
-eq3_int<- readRDS(paste0(parent_dir, "/rna_data/rna_eq3_sv"))
+eq1_int<- readRDS(paste0(parent_dir, "rna_eq1"))
+eq2_int<- readRDS(paste0(parent_dir, "rna_eq2"))
+eq3_int<- readRDS(paste0(parent_dir, "rna_eq3"))
 base_meta<- read.table(paste0(parent_dir, "base_meta.txt"))
 rna_counts<- readRDS(paste0(parent_dir, "Cayo_PBMC_longLPS_counts_9Jan26.rds"))
 
 #Make simplified outcome df
-eq1_int<- eq1[["df"]]
-eq2_int<- eq2[["df"]]
-eq3_int<- eq3[["df"]]
+eq1_int<- eq1_int[["df"]]
+eq2_int<- eq2_int[["df"]]
+eq3_int<- eq3_int[["df"]]
 rna_int<- as.data.frame(cbind(eq1_int$outcome, eq1_int$beta_trapped_age, 
                               eq1_int$pvalue_trapped_age, eq1_int$se_trapped_age,
                               eq2_int$beta_within_age, eq2_int$pvalue_within_age,
