@@ -2,7 +2,7 @@
 
 #SBATCH --mail-type=FAIL
 #SBATCH --mail-user=ckelsey4@asu.edu
-#SBATCH --mem=50G 
+#SBATCH --mem=20G 
 #SBATCH --array=1-3
 
 SAMP <- Sys.getenv("SLURM_ARRAY_TASK_ID")
@@ -21,10 +21,12 @@ rna_counts<- readRDS("/home/ckelsey4/Cayo_meth/rna_seq/Cayo_PBMC_longLPS_counts_
 rna_kin<- readRDS("/home/ckelsey4/rna_data/rna_kin_matrix.rds")
 
 base_meta<- base_meta %>%
-  arrange(Sample_ID) %>%
+  arrange(Sample_ID) %>% 
+  filter(Seq_batch %in% c(1, 2, 3)) %>%
   mutate(y = 1)
 
 #Normalize RNA Count Data-------------------------------------------------------
+base_meta<- base_meta[base_meta$Sample_ID %in% colnames(rna_counts),]
 rna_counts<- rna_counts[, base_meta$Sample_ID]
 
 #Generate normalized counts
@@ -42,17 +44,7 @@ if (all.equal(base_meta$Sample_ID, colnames(rna_counts)) == T) {
 
 rna_norm<- rna_norm[rownames(rna_norm) %in% base_meta$Sample_ID,]
 
-#Generate surrogate variables
-# Create model matrix
-mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = base_meta)
-mat0<- model.matrix(~ mean_age + sex + p_gene_counts + p_uniq_mapped, data = base_meta)
-
-svobj = sva(t(rna_norm),mat,mat0)
-SVs<-as.data.frame(svobj$sv)[1:5]
-colnames(SVs)<- paste0("SV", 1:ncol(SVs))
-base_meta<-cbind(base_meta, SVs)
-
-rm(mat);rm(mat0)
+rna_kin<- rna_kin[unique(base_meta$animal_ID), unique(base_meta$animal_ID)]
 
 #Run EMMA for EQ3---------------------------------------------------------------
 run_emma<- function(meta, model){
@@ -60,36 +52,26 @@ run_emma<- function(meta, model){
   if (model == "eq1") {
     
     # Create model matrix
-    #mat<- model.matrix(~ trapped_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
-    mat<- model.matrix(~ trapped_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5,
-                       data = meta)
-    re_eq<- "y ~ trapped_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5 + (1|animal_ID)"
+    mat<- model.matrix(~ trapped_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped, data = meta)
+    re_eq<- "y ~ trapped_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
     
   } else if (model == "eq2") {
     
     # Create model matrix
-    #mat<- model.matrix(~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
-    mat<- model.matrix(~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped + 
-                         SV1 + SV2 + SV3 + SV4 + SV5,
-                       data = meta)
-    re_eq<- "y ~ within_age + mean_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5 + (1|animal_ID)"
+    mat<- model.matrix(~ within_age + mean_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped, data = meta)
+    re_eq<- "y ~ within_age + mean_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
     
   } else if (model == "eq3") {
     
     # Create model matrix
-    #mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped, data = meta)
-    mat<- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped + 
-                         SV1 + SV2 + SV3 + SV4 + SV5,
-                       data = meta)
-    re_eq<- "y ~ trapped_age + mean_age + sex + p_gene_counts + p_uniq_mapped + SV1 + SV2 + SV3 + SV4 + SV5 + (1|animal_ID)"
+    mat<- model.matrix(~ trapped_age + mean_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped, data = meta)
+    re_eq<- "y ~ trapped_age + mean_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
     
   }
   
   #Generates random effects matrix
-  re_mat <- lFormula(eval(re_eq), meta)
+  re_mat <- lFormula(eval(re_eq), base_meta)
   re_matZ <- as.matrix(t(re_mat$reTrms$Zt))
-  
-  rna_kin<- rna_kin[colnames(re_matZ), colnames(re_matZ)]
   
   #Generate empty df to input emma output
   df<- data.frame(matrix(nrow=0, ncol=4*(ncol(mat))))
@@ -129,4 +111,4 @@ model_name<- params[SAMP]
 
 result<- run_emma(meta = base_meta, model = model_name)
 
-saveRDS(result, paste("/home/ckelsey4/rna_data/rna", model_name, "sv", sep = "_"))
+saveRDS(result, paste("/home/ckelsey4/rna_data/rna", model_name, sep = "_"))

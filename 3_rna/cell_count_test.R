@@ -21,13 +21,12 @@ base_meta<- base_meta %>%
   arrange(Sample_ID) %>%
   mutate(y = 1)
 
-cell_counts<- cell_counts %>% rename(animal_ID = monkey_id)
-cell_counts<- cell_counts %>% rename(trapping_ID = trapping_id)
+cell_counts<- cell_counts %>% 
+  dplyr::rename(animal_ID = monkey_id)
+cell_counts<- cell_counts %>% 
+  dplyr::rename(trapping_ID = trapping_id)
 
-base_meta<- left_join(base_meta, cell_counts, by = c("animal_ID", "trapping_ID"))
-
-base_meta<- base_meta %>%
-  drop_na()
+base_meta<- inner_join(base_meta, cell_counts, by = c("animal_ID", "trapping_ID"))
 
 base_meta<- base_meta %>%
   distinct(trapping_ID, .keep_all = T)
@@ -71,9 +70,9 @@ run_emma<- function(df, cell_counts){
   if (cell_counts == T) {
     
     # Create model matrix
-    mat <- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts + 
+    mat <- model.matrix(~ trapped_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped +
                           cd3_cd8_proportion + cd3_cd16_proportion + cd20_proportion, data = df)
-    re_eq <- "y ~ trapped_age + mean_age + sex + p_gene_counts + cd3_cd4_proportion + 
+    re_eq <- "y ~ trapped_age + mean_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped + cd3_cd4_proportion + 
                           cd3_cd8_proportion + cd3_cd16_proportion + cd20_proportion + (1|animal_ID)"
     
     print(colnames(mat))
@@ -81,8 +80,8 @@ run_emma<- function(df, cell_counts){
   } else {
     
     # Create model matrix
-    mat <- model.matrix(~ trapped_age + mean_age + sex + p_gene_counts, data = df)
-    re_eq <- "y ~ trapped_age + mean_age + sex + p_gene_counts + (1|animal_ID)"
+    mat <- model.matrix(~ trapped_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped, data = df)
+    re_eq <- "y ~ trapped_age + mean_age + sex + Seq_batch + p_gene_counts + p_uniq_mapped + (1|animal_ID)"
     
     print(colnames(mat))
     

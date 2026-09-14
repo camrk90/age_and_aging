@@ -13,8 +13,14 @@ library(GenomicFeatures)
 library(GenomicRanges)
 library(msigdbr)
 library(broom)
+library(insight)
+library(sjPlot)
 
+#Load workspace image-----------------------------------------------------------
+#Use with remote
 load("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
+
+#Use with local
 load("~/Documents/smack_lab/cayo_data/cross_within_compare.RData")
 
 #Define import function
@@ -1326,6 +1332,15 @@ pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age < .05 & pqlseq_proms$fdr_eq3_
 pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age > .05 & pqlseq_proms$fdr_eq3_age < .05]<- "Eq.3 Signif."
 pqlseq_proms$eq3_signif[pqlseq_proms$fdr_chron_age < .05 & pqlseq_proms$fdr_eq3_age < .05]<- "Both Signif."
 
+#Eq.1 vs Eq.3 descriptive stats
+cor.test(pqlseq_proms$beta_chron_age, pqlseq_proms$beta_eq3_age)
+median(pqlseq_proms$eq3_chron_diff)
+min(pqlseq_proms$eq3_chron_diff)
+max(pqlseq_proms$eq3_chron_diff)
+
+pqlseq_proms %>% filter(fdr_chron_age < .05) %>% nrow()
+pqlseq_proms %>% filter(fdr_eq3_age < .05) %>% nrow()
+
 pqlseq_proms %>%
   filter(fdr_chron_age < .05 | fdr_eq3_age < .05) %>%
   ggplot(aes(beta_chron_age, beta_eq3_age)) +
@@ -1394,12 +1409,15 @@ top10<- pqlseq_proms %>%
   dplyr::slice(c(1:10, (n() - 9):n()))
 
 top10 %>%
-  dplyr::select(beta_chron_age, beta_eq3_age, gene_name, eq3_chron_diff) %>%
-  pivot_longer(cols = c(beta_chron_age, beta_eq3_age),
+  dplyr::select(beta_chron_age, beta_eq3_age,
+                fdr_chron_age, fdr_eq3_age,
+                gene_name, eq3_chron_diff) %>%
+  pivot_longer(cols = c(beta_chron_age, beta_eq3_age,
+                        fdr_chron_age, fdr_eq3_age),
                names_to = c(".value", "model"),
                names_sep = "_") %>%
   ggplot(aes(x=beta, y=reorder(gene_name, abs(eq3_chron_diff)), colour = model)) +
-  geom_point(aes()) +
+  geom_point(aes(alpha = fdr < .05)) +
   #scale_size(range = c(0.05, 2)) +
   geom_path(aes(group = gene_name), colour = "black") +
   scale_colour_manual(values = c("steelblue2", "purple")) +
@@ -1411,12 +1429,124 @@ top10 %>%
         plot.margin = margin(1, 1, 1, 1, "pt"),
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  scale_x_continuous(breaks = seq(-0.1, 0.1, 0.05), limits = c(-0.10, 0.12)) +
   ylab("Promoter") +
   xlab(expression(beta))
 
-ggsave("~/Documents/smack_lab/age_aging_plots/top20_prom_dnam_diffs.svg", 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/top20_prom_dnam_diffs.svg", 
        height = 100, width = 50, units = "mm")
 
+#### Generate glmer model of largest eq3_chron_diff promoters-------------------
+rownames(regions_cov)<- str_split_i(rownames(regions_cov), "\\.", 4)
+rownames(regions_m)<- str_split_i(rownames(regions_m), "\\.", 4)
+
+example_proms<- pqlseq_proms %>% filter(gene_name %in% c("MAP2K1", "CDC14C"))
+regions_cov<- t(regions_cov[rownames(regions_cov) %in% example_proms$outcome,])
+regions_m<- t(regions_m[rownames(regions_m) %in% colnames(regions_cov),])
+colnames(regions_cov)<- c("CDC14C", "MAP2K1")
+colnames(regions_m)<- c("CDC14C", "MAP2K1")
+
+#Filter metadata to lids in regions list
+long_data2<- long_data[long_data$lid_pid %in% rownames(regions_cov),]
+
+regions_cov<- regions_cov[rownames(regions_cov) %in% long_data$lid_pid,]
+regions_m<- regions_m[rownames(regions_m) %in% long_data$lid_pid,]
+
+age<- long_data2$age_at_sampling
+age.w<- long_data2$within.age
+age.m<- long_data2$mean.age
+sex<- long_data2$individual_sex
+uni<- long_data2$university
+ids<- long_data2$monkey_id
+
+eq1_cdc<- glmer(cbind(regions_m[,1],regions_cov[,1]) ~ age + sex + uni + (1|ids),
+                family = binomial(link = "logit"))
+eq3_cdc<- glmer(cbind(regions_m[,1],regions_cov[,1]) ~ age + age.m + sex + uni + (1|ids),
+                family = binomial(link = "logit"))
+
+eq1_cdc_plot<- plot_model(eq1_cdc, type = "pred", terms = "age")
+eq3_cdc_plot<- plot_model(eq3_cdc, type = "pred", terms = "age")
+
+ggplot() +
+  geom_line(data = eq1_cdc_plot$data,
+            aes(x = x, y = predicted, color = "Eq.1")) +
+  geom_point(data = eq1_cdc_plot$data,
+             aes(x = x, y = predicted, color = "Eq.1")) +
+  geom_ribbon(data = eq1_cdc_plot$data,
+              aes(ymin = conf.low,
+                  ymax = conf.high,
+                  x = x, fill = "Eq.1"),
+              alpha = 0.1, linewidth = 0) +
+  geom_line(data = eq3_cdc_plot$data,
+            aes(x = x, y = predicted, color = "Eq.3", alpha = 0.1)) +
+  geom_point(data = eq3_cdc_plot$data,
+             aes(x = x, y = predicted, color = "Eq.3", alpha = 0.1)) +
+  geom_ribbon(data = eq3_cdc_plot$data,
+              aes(ymin = conf.low,
+                  ymax = conf.high,
+                  x = x, fill = "Eq.3"),
+              alpha = 0.1, linewidth = 0) +
+  scale_colour_manual(values = c("steelblue2", "purple")) +
+  scale_fill_manual(values = c("steelblue2", "purple")) +
+  theme_classic(base_size=6) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  xlab("Age") +
+  ylab("Predicted Probability")
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/cdc14c_plot.svg", 
+       height = 50, width = 50, units = "mm")
+
+#MAP2K1
+eq1_map<- glmer(cbind(regions_m[,2],regions_cov[,2]) ~ age + sex + uni + (1|ids),
+                family = binomial(link = "logit"))
+eq3_map<- glmer(cbind(regions_m[,2],regions_cov[,2]) ~ age + age.m + sex + uni + (1|ids),
+                family = binomial(link = "logit"))
+
+eq1_map_plot<- plot_model(eq1_map, type = "pred", terms = "age")
+eq3_map_plot<- plot_model(eq3_map, type = "pred", terms = "age")
+
+ggplot() +
+  geom_line(data = eq1_map_plot$data,
+            aes(x = x, y = predicted, color = "Eq.1", alpha = 0.1)) +
+  geom_point(data = eq1_map_plot$data,
+             aes(x = x, y = predicted, color = "Eq.1", alpha = 0.1)) +
+  geom_ribbon(data = eq1_map_plot$data,
+              aes(ymin = conf.low,
+                  ymax = conf.high,
+                  x = x, fill = "Eq.1"),
+              alpha = 0.1, linewidth = 0) +
+  geom_line(data = eq3_map_plot$data,
+            aes(x = x, y = predicted, color = "Eq.3")) +
+  geom_point(data = eq3_map_plot$data,
+             aes(x = x, y = predicted, color = "Eq.3")) +
+  geom_ribbon(data = eq3_map_plot$data,
+              aes(ymin = conf.low,
+                  ymax = conf.high,
+                  x = x, fill = "Eq.3"),
+              alpha = 0.1, linewidth = 0) +
+  scale_colour_manual(values = c("steelblue2", "purple")) +
+  scale_fill_manual(values = c("steelblue2", "purple")) +
+  theme_classic(base_size=6) +
+  theme(legend.position = "none",
+        panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  xlab("Age") +
+  ylab("Predicted Probability")
+  
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/map2k1_plot.svg", 
+       height = 50, width = 50, units = "mm")
+
+#### Generate top and bottom 10 for all vars------------------------------------
 # vector of model suffixes
 models <- c("chron_age", "eq2_m_age", "eq3_age")
 
@@ -1467,7 +1597,7 @@ top_10 %>%
 ggsave("~/Documents/smack_lab/age_aging_plots/top10_proms_dnam.svg", 
        height = 100, width = 50, units = "mm")
 
-#Promoter GSEA------------------------------------------------------------------
+# Promoter GSEA-----------------------------------------------------------------
 #Generate hallmark gene set
 hallmark.msigdb = msigdbr(species = "Macaca mulatta", category = "H")
 hallmark_list = split(x = hallmark.msigdb$ensembl_gene, f = hallmark.msigdb$gs_name)
@@ -1483,46 +1613,47 @@ names(proms_gsea2) = proms_gsea$anno
 set.seed(666)
 
 diff_gsea_out<- fgsea(pathways = hallmark_list, 
-                      stats = proms_gsea2,
-                      minSize = 15,
-                      maxSize = 500,
-                      eps = 0.0)
+                      stats = proms_gsea2)
 
 diff_gsea_out$pathway<- gsub("HALLMARK_", "", diff_gsea_out$pathway)
 
 diff_gsea_out %>%
   arrange(NES) %>%
-  dplyr::slice(c(1:10, (n() - 9):n())) %>%
+  dplyr::slice(c(1:5, (n() - 4):n())) %>%
   ggplot(aes(x=NES, y=reorder(pathway, NES), colour = NES < 0)) +
   #geom_col(aes(alpha = padj<.05)) +
-  geom_point(aes(shape = padj < .10)) +
+  geom_point(aes(alpha = padj < .10, size = size)) +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  scale_colour_manual(values = c("steelblue2", "purple")) +
+  scale_colour_manual(values = c("purple", "steelblue2")) +
   theme_classic(base_size = 6) +
-  theme(legend.position = "top",
+  theme(legend.position = "none",
         panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
         panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
         panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
   ylab("Pathway") +
-  xlab("NES")
+  xlab("NES") +
+  scale_x_continuous(breaks = seq(-2, 2, 1), limits = c(-2,2))
 
-ggsave("~/Documents/smack_lab/age_aging_plots/diff_gsea.svg", 
-       height = 100, width = 75, units = "mm")
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/diff_gsea.svg", 
+       height = 50, width = 70, units = "mm")
 
 #RNAxDNAm-----------------------------------------------------------------------
+rna_int<- rna_int %>%
+  dplyr::rename(gene_name = outcome)
 rna_int<- left_join(rna_int, mm_genes, by = "gene_name")
 rna_dnam<- inner_join(pqlseq_proms, rna_int, by = "anno", 
                       suffix = c("_dnam", "_rna"))
 
 rna_dnam %>%
+  mutate(signif = ifelse(pval_eq3_age < .05 & fdr_eq3_age < .05, "Y", "N")) %>%
   ggplot(aes(beta_chron_age_dnam, beta_chron_age_rna)) +
-  geom_point(aes(alpha = 0.3), size = 0.1) +
+  geom_point(aes(alpha = 0.3, colour = signif), size = 0.1) +
   geom_smooth(method = "lm") +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_vline(xintercept = 0, linetype = "dashed") +
-  #scale_colour_manual(values = c("steelblue2", "steelblue4")) +
+  scale_colour_manual(values = c("steelblue2", "steelblue4")) +
   theme_classic(base_size = 6) +
   theme(legend.position = "none") +
   theme(panel.background = element_rect(colour = "black", linewidth=1),
@@ -1536,16 +1667,19 @@ rna_dnam %>%
   xlab(expression(beta["DNAm"])) +
   ylab(expression(beta["GE"]))
 
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/rna_dnam_eq1.svg", 
+       height = 50, width = 50, units = "mm")
+
 rna_dnam %>%
-  mutate(signif = ifelse(pval_eq3_age < .20 & fdr_eq3_age < .20, "Y", "N")) %>%
+  mutate(signif = ifelse(pval_eq3_age < .05 & fdr_eq3_age < .05, "Y", "N")) %>%
   ggplot(aes(beta_eq3_age_dnam, beta_eq3_age_rna)) +
-  geom_point(aes(alpha = 0.3, colour = signif), size = 0.1) +
+  geom_point(aes(colour = signif), size = 0.1) +
   geom_smooth(method = "lm") +
   geom_hline(yintercept = 0, linetype = "dashed") +
   geom_vline(xintercept = 0, linetype = "dashed") +
   scale_colour_manual(values = c("purple", "purple4")) +
   theme_classic(base_size = 6) +
-  #theme(legend.position = "none") +
+  theme(legend.position = "none") +
   theme(panel.background = element_rect(colour = "black", linewidth=1),
         axis.line = element_line(colour = "black", linewidth = 0.5),
         plot.margin = margin(1, 1, 1, 1, "pt"),
@@ -1556,12 +1690,13 @@ rna_dnam %>%
   #scale_x_continuous(breaks = seq(-0.2, 0.2, 0.1), limits = c(-0.2, 0.2)) +
   xlab(expression(beta["DNAm"])) +
   ylab(expression(beta["GE"]))
+
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/rna_dnam_eq3.svg", 
+       height = 50, width = 50, units = "mm")
   
 
 cor.test(rna_dnam$beta_eq3_age_dnam, rna_dnam$beta_eq3_age_rna)
 cor.test(rna_dnam$beta_chron_age_dnam, rna_dnam$beta_chron_age_rna)
-
-
 
 #Save workspace image
 save.image("/scratch/ckelsey4/Cayo_meth/cross_within_compare.RData")
