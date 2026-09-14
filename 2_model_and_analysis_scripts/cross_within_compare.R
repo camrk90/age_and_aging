@@ -643,13 +643,23 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/eq2_eq3_scatterplot_dnam.svg",
        plot = last_plot(),
        height = 50, width = 50, units = "mm")
 
-df<- age_trunc %>%
-  filter(fdr_chron_age < .05 | fdr_eq3_age < .05)
-cor.test(df$beta_chron_age, df$beta_eq3_age)
+age_trunc %>%
+  ggplot(aes(beta_eq3_age_m, fill = beta_eq3_age_m < 0)) +
+  geom_histogram(bins = 100, colour = "black") +
+  geom_vline(xintercept=0, linetype="dashed") +
+  scale_fill_manual(values = c("red", "red4")) +
+  theme_classic(base_size = 6) +
+  theme(legend.position = "none") +
+  theme(panel.background = element_rect(colour = "black", linewidth=1),
+        axis.line = element_line(colour = "black", linewidth = 0.5),
+        plot.margin = margin(1, 1, 1, 1, "pt"),
+        aspect.ratio = 1,
+        panel.grid.major = element_line(color = "grey90", linewidth = 0.5),
+        panel.grid.minor = element_line(color = "grey98", linewidth = 0.5)) +
+  xlab(expression(beta["Eq.2 B"]-beta["Eq.2 W"])) +
+  ylab("Count")
 
-df2<- age_trunc %>%
-  filter(fdr_chron_age < .05 | fdr_eq2_m_age < .05)
-cor.test(df2$beta_chron_age, df2$beta_eq2_m_age)
+
 
 #Counts and Beta Distributions
 count_signif_regions<- function(x) {
@@ -741,20 +751,20 @@ ggsave("/home/ckelsey4/Cayo_meth/aging_plots/beta_dist_dnam.svg",
 
 ## Significant regions Venn diagram
 #cross.age<- age_trunc$outcome[age_trunc$fdr_cross< 0.05]
-chron.age<- age_trunc$outcome[age_trunc$fdr_chron_age< 0.05]
+#chron.age<- age_trunc$outcome[age_trunc$fdr_chron_age< 0.05]
 #age.w<- age_trunc$outcome[age_trunc$fdr_eq2_w_age < 0.05]
 eq2.btwn<- age_trunc$outcome[age_trunc$fdr_eq2_m_age < 0.05]
 eq3<- age_trunc$outcome[age_trunc$fdr_eq3_age < 0.05]
+eq3_btwn<- age_trunc$outcome[age_trunc$fdr_eq3_age_m < 0.05]
 
-venn_all<- list(chron.age, eq3, eq2.btwn)
-names(venn_all)<- c("Eq.1", "Eq.3 Within", "Eq.2 Btwn")
+venn_all<- list(eq3, eq2.btwn, eq3_btwn)
+names(venn_all)<- c("Eq.3 Within", "Eq.2 Btwn", "Eq.3 Btwn")
 
 upset(fromList(venn_all), order.by = "freq", 
       text.scale = c(1, 1, 1, 1, 1, 1), 
       line.size = 1, point.size = 2)
 
-ggsave("/home/ckelsey4/Cayo_meth/aging_plots/intersect.svg",
-       height = 45, width = 65, units = "mm")
+ggsave("/home/ckelsey4/Cayo_meth/aging_plots/intersect.svg")
 
 ######################################
 ###      JOIN INTERSECT FILES      ###   
